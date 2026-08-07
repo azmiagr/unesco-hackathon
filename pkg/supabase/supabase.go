@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/azmiagr/garudahacks-hackathon/pkg/imageutil"
+	"github.com/azmiagr/unesco-hackathon/pkg/imageutil"
 	"github.com/google/uuid"
 	storage_go "github.com/supabase-community/storage-go"
 )
