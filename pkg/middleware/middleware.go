@@ -9,7 +9,14 @@ import (
 type Interface interface {
 	Cors() gin.HandlerFunc
 	AuthenticateUser(c *gin.Context)
+	OnlyRoles(allowedRoles ...string) gin.HandlerFunc
+	OnlyAdmin() gin.HandlerFunc
 }
+
+const (
+	userContextKey     = "user"
+	roleNameContextKey = "role_name"
+)
 
 type middleware struct {
 	service *service.Service

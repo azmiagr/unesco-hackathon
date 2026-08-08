@@ -281,9 +281,14 @@ func (s *AuthService) CompleteRegisterProfile(sessionToken string, req model.Com
 		return nil, appErrors.InternalServer("failed to check username existence")
 	}
 
+	role, err := s.roleRepo.GetRoleByName(tx, constants.RoleUser)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get user role")
+	}
+
 	user := &entity.User{
 		UserID:   uuid.New(),
-		RoleID:   constants.UserRole,
+		RoleID:   role.RoleID,
 		Username: username,
 		Email:    session.Email,
 		Password: session.PasswordHash,
@@ -318,11 +323,6 @@ func (s *AuthService) CompleteRegisterProfile(sessionToken string, req model.Com
 	err = s.sessionRepo.UpdateRegistrationSession(tx, session)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to update registration session")
-	}
-
-	role, err := s.roleRepo.GetRole(tx, user.RoleID)
-	if err != nil {
-		return nil, appErrors.InternalServer("failed to get role")
 	}
 
 	token, err := s.jwtAuth.CreateJWTToken(user.UserID, role.RoleName)

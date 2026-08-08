@@ -47,6 +47,14 @@ func (m *middleware) AuthenticateUser(c *gin.Context) {
 		return
 	}
 
-	c.Set("user", user)
+	roleName, err := m.service.UserService.GetUserRoleName(user)
+	if err != nil {
+		response.Error(c, http.StatusUnauthorized, "failed to get user role", err)
+		c.Abort()
+		return
+	}
+
+	c.Set(userContextKey, user)
+	c.Set(roleNameContextKey, roleName)
 	c.Next()
 }

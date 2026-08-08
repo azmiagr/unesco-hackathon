@@ -8,6 +8,7 @@ import (
 
 type IRoleRepository interface {
 	GetRole(tx *gorm.DB, roleID uuid.UUID) (*entity.Role, error)
+	GetRoleByName(tx *gorm.DB, roleName string) (*entity.Role, error)
 }
 
 type RoleRepository struct {
@@ -21,6 +22,15 @@ func NewRoleRepository(db *gorm.DB) IRoleRepository {
 func (r *RoleRepository) GetRole(tx *gorm.DB, roleID uuid.UUID) (*entity.Role, error) {
 	var role entity.Role
 	err := tx.Where("role_id = ?", roleID).First(&role).Error
+	if err != nil {
+		return nil, err
+	}
+	return &role, nil
+}
+
+func (r *RoleRepository) GetRoleByName(tx *gorm.DB, roleName string) (*entity.Role, error) {
+	var role entity.Role
+	err := tx.Where("role_name = ?", roleName).First(&role).Error
 	if err != nil {
 		return nil, err
 	}
