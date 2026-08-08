@@ -3,43 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verifikasi Akun - Akademi Competition</title>
+    <title>Verifikasi Akun - Kode Kabi</title>
     <style>
         body {
             margin: 0;
             padding: 0;
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            background-color: #e9eff5;
-            color: #334155;
+            background-color: #0B0C10;
+            color: #f8fafc;
         }
 
         .wrapper {
             width: 100%;
-            background-color: #e9eff5;
-            background-image: radial-gradient(#cbd5e1 0.5px, transparent 0.5px);
-            background-size: 20px 20px;
+            background-color: #0B0C10;
+            background-image:
+                radial-gradient(circle at top left, rgba(131, 117, 232, 0.22), transparent 32%),
+                radial-gradient(circle at bottom right, rgba(253, 191, 59, 0.16), transparent 28%);
             padding: 50px 10px;
         }
 
         .main-card {
-            background-color: #ffffff;
+            background-color: #11131a;
             margin: 0 auto;
             max-width: 600px;
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            border: 1px solid #d1d5db;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+            border: 1px solid #252838;
         }
 
         .brand-header {
-            background-color: #003366; 
-            padding: 30px 40px;
-            text-align: center;
+            background-color: #0B0C10;
+            padding: 32px 40px 24px;
+            text-align: left;
+            border-bottom: 1px solid #252838;
         }
-        .logo {
-            height: 55px;
-            width: auto;
-            filter: brightness(0) invert(1); 
+        .brand-mark {
+            display: inline-block;
+            width: 42px;
+            height: 42px;
+            line-height: 42px;
+            text-align: center;
+            border-radius: 50%;
+            background-color: #FDBF3B;
+            color: #0B0C10;
+            font-size: 22px;
+            font-weight: 900;
+            vertical-align: middle;
+        }
+        .brand-name {
+            display: inline-block;
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 900;
+            letter-spacing: 0;
+            margin-left: 12px;
+            vertical-align: middle;
+            text-transform: uppercase;
+        }
+        .brand-accent {
+            color: #FDBF3B;
         }
 
         .content {
@@ -49,29 +72,32 @@
         .headline {
             font-size: 22px;
             font-weight: 700;
-            color: #003366;
+            color: #ffffff;
             margin: 0 0 20px 0;
-            letter-spacing: -0.5px;
+            letter-spacing: 0;
+        }
+        .headline-accent {
+            color: #F26D6D;
         }
         .text-body {
             font-size: 15px;
             line-height: 1.7;
-            color: #475569;
+            color: #a7adbd;
             margin-bottom: 30px;
         }
 
         .otp-section {
-            background-color: #f1f5f9;
+            background-color: #171923;
             border-radius: 8px;
             padding: 30px;
             text-align: center;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #2c3042;
             margin-bottom: 35px;
         }
         .otp-label {
             font-size: 12px;
             font-weight: 600;
-            color: #64748b;
+            color: #8375E8;
             text-transform: uppercase;
             letter-spacing: 2px;
             margin-bottom: 10px;
@@ -81,7 +107,7 @@
             font-size: 40px;
             font-weight: 800;
             letter-spacing: 10px;
-            color: #FFA500; 
+            color: #FDBF3B;
             margin: 0;
             font-family: 'Courier New', Courier, monospace;
         }
@@ -91,7 +117,7 @@
             margin-bottom: 20px;
         }
         .btn-primary {
-            background-color: #007bff;
+            background-color: #8375E8;
             color: #ffffff !important;
             padding: 15px 40px;
             text-decoration: none;
@@ -103,21 +129,25 @@
 
         .footer {
             padding: 30px 40px;
-            background-color: #f8fafc;
-            border-top: 1px solid #e2e8f0;
+            background-color: #0B0C10;
+            border-top: 1px solid #252838;
             font-size: 12px;
-            color: #64748b;
+            color: #8d94a7;
             line-height: 1.6;
         }
         .security-note {
-            color: #dc2626; 
+            color: #F26D6D;
             font-weight: 600;
+        }
+        .success-note {
+            color: #5BB56A;
+            font-weight: 700;
         }
         .copyright {
             margin-top: 25px;
             text-align: center;
             font-size: 11px;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid #252838;
             padding-top: 20px;
         }
 
@@ -133,32 +163,35 @@
         <table class="main-card" cellpadding="0" cellspacing="0">
             <tr>
                 <td class="brand-header">
-                    <img src="https://akademicompetition.id/assets/logo_ac-KjCHwcnL.svg" alt="Akademi Competition" class="logo">
+                    <span class="brand-mark">K</span>
+                    <span class="brand-name">Kode<span class="brand-accent">Kabi</span></span>
                 </td>
             </tr>
             <tr>
                 <td class="content">
-                    <h1 class="headline">Konfirmasi Registrasi Akun</h1>
+                    <h1 class="headline">Cek Email Kamu<span class="headline-accent">.</span></h1>
                     
                     <p class="text-body">
                         Hai, <strong>{{.Name}}</strong>,<br><br>
-                        Terima kasih telah melakukan pendaftaran di platform <strong>Akademi Competition</strong>. Langkah ini diperlukan untuk memastikan validitas data dan keamanan akun Anda sebelum dapat mengakses seluruh fitur kompetisi kami.
+                        Terima kasih sudah mendaftar di <strong>Kode Kabi</strong>. Satu langkah lagi sebelum kamu masuk ke Kota Nusa dan mulai jadi auditor baru.
                         <br><br>
-                        Silakan gunakan kode verifikasi di bawah ini untuk melanjutkan proses aktivasi:
+                        Masukkan kode verifikasi berikut untuk melanjutkan proses registrasi:
                     </p>
 
                     <div class="otp-section">
-                        <span class="otp-label">Kode Otentikasi</span>
+                        <span class="otp-label">Kode Verifikasi</span>
                         <h2 class="otp-code">{{.Code}}</h2>
                     </div>
 
+                    {{if .VerificationLink}}
                     <p class="text-body" style="text-align: center; font-size: 14px;">
                         Atau klik tautan di bawah ini untuk verifikasi secara langsung:
                     </p>
 
                     <div class="btn-container">
-                        <a href="{{.VerificationLink}}" class="btn-primary">Verifikasi Akun Anda</a>
+                        <a href="{{.VerificationLink}}" class="btn-primary">Verifikasi Akun</a>
                     </div>
+                    {{end}}
                 </td>
             </tr>
             <tr>
@@ -167,11 +200,12 @@
                     <br>
                     Kode verifikasi ini bersifat rahasia dan hanya berlaku selama <strong>{{.ExpiryMinutes}} menit</strong>. Mohon untuk tidak memberikan kode ini kepada pihak manapun.
                     <br><br>
-                    <span class="security-note">Waspada Penipuan:</span> Akademi Competition tidak pernah meminta data sensitif seperti kata sandi atau informasi perbankan melalui saluran komunikasi tidak resmi.
+                    <span class="security-note">Waspada Penipuan:</span> Kode Kabi tidak pernah meminta kata sandi, OTP, atau data sensitif lewat saluran tidak resmi.
+                    <br><br>
+                    <span class="success-note">Sampai jumpa di Kota Nusa.</span>
                     
                     <div class="copyright">
-                        &copy; {{.Year}} <strong>Akademi Competition</strong>. Seluruh hak cipta dilindungi undang-undang.<br>
-                        <a href="https://akademicompetition.id/" style="color: #003366; text-decoration: none;">www.akademicompetition.id</a>
+                        &copy; {{.Year}} <strong>Kode Kabi</strong>. Seluruh hak cipta dilindungi undang-undang.
                     </div>
                 </td>
             </tr>

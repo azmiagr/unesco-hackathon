@@ -21,9 +21,8 @@ func (m *middleware) Cors() gin.HandlerFunc {
 		AllowOrigins:     origins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "Cookie", "X-Session-Token"},
-		ExposeHeaders:    []string{"Content-Length", "Content-Type"},
+		ExposeHeaders:    []string{"Content-Length", "Content-Type", "X-Session-Token"},
 		AllowCredentials: true,
-
-		MaxAge: 12 * time.Hour,
+		MaxAge:           12 * time.Hour,
 	})
 }

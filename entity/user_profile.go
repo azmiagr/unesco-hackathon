@@ -10,6 +10,7 @@ type UserProfile struct {
 	UserProfileID              uuid.UUID `json:"user_profile_id" gorm:"type:varchar(36);primaryKey"`
 	UserID                     uuid.UUID `json:"user_id" gorm:"type:varchar(36);unique;not null"`
 	AvatarID                   uuid.UUID `json:"avatar_id" gorm:"type:varchar(36)"`
+	Title                      string    `json:"title" gorm:"type:varchar(255)"`
 	CurrentLevel               int       `json:"current_level" gorm:"type:int;default:0"`
 	CurrentXP                  int       `json:"current_xp" gorm:"type:int;default:0"`
 	AuditorReputation          float64   `json:"auditor_reputation" gorm:"type:decimal(8,2);default:0"`

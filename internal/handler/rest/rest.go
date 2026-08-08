@@ -26,7 +26,15 @@ func NewRest(service *service.Service, middleware middleware.Interface) *Rest {
 
 func (r *Rest) MountEndpoint() {
 	r.router.Use(r.middleware.Cors())
+	baseUrl := r.router.Group("/api/v1")
 
+	auth := baseUrl.Group("/auth")
+	auth.GET("/session", r.GetRegisterSession)
+	auth.POST("/register/start", r.StartRegister)
+	auth.POST("/register/verify-otp", r.VerifyRegisterOtp)
+	auth.POST("/register/avatar", r.SelectRegisterAvatar)
+	auth.POST("/register/complete", r.CompleteRegisterProfile)
+	auth.POST("/login", r.Login)
 }
 
 func (r *Rest) Run() {

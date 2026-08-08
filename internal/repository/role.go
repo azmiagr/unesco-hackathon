@@ -1,0 +1,28 @@
+package repository
+
+import (
+	"github.com/azmiagr/unesco-hackathon/entity"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+type IRoleRepository interface {
+	GetRole(tx *gorm.DB, roleID uuid.UUID) (*entity.Role, error)
+}
+
+type RoleRepository struct {
+	db *gorm.DB
+}
+
+func NewRoleRepository(db *gorm.DB) IRoleRepository {
+	return &RoleRepository{db: db}
+}
+
+func (r *RoleRepository) GetRole(tx *gorm.DB, roleID uuid.UUID) (*entity.Role, error) {
+	var role entity.Role
+	err := tx.Where("role_id = ?", roleID).First(&role).Error
+	if err != nil {
+		return nil, err
+	}
+	return &role, nil
+}
