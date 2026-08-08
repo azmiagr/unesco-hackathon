@@ -1,7 +1,16 @@
 #!/bin/bash
 set -e
 
-APP_DIR="${APP_DIR:-$HOME/un}"
+APP_DIR="${APP_DIR:-$HOME/project/un/unesco-hackathon}"
+
+echo "Changing directory to: $APP_DIR"
+cd "$APP_DIR"
+
+if [ -f .env ]; then
+  set -a
+  . ./.env
+  set +a
+fi
 
 IMAGE="ghcr.io/${GITHUB_REPOSITORY:-azmiagr/unesco-hackathon}:latest"
 APP_PORT="${PORT:-8081}"
