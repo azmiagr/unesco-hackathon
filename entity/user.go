@@ -12,7 +12,7 @@ type User struct {
 	Username  string    `json:"username" gorm:"type:varchar(50);not null"`
 	Email     string    `json:"email" gorm:"type:varchar(150);not null;unique"`
 	Password  string    `json:"password" gorm:"type:varchar(255);not null"`
-	Status    string    `json:"status" gorm:"type:enum('active','inactive');default:'inactive'"`
+	Status    string    `json:"status" gorm:"type:enum('active','inactive','suspended', 'banned');default:'inactive'"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 

@@ -1,0 +1,31 @@
+package helper
+
+import (
+	"github.com/azmiagr/unesco-hackathon/entity"
+	"github.com/azmiagr/unesco-hackathon/pkg/errors"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+)
+
+func ParseUserIDParam(c *gin.Context) (uuid.UUID, error) {
+	userID, err := uuid.Parse(c.Param("userID"))
+	if err != nil {
+		return uuid.Nil, errors.BadRequest("invalid user id")
+	}
+
+	return userID, nil
+}
+
+func GetAuthenticatedUser(c *gin.Context) (*entity.User, error) {
+	userValue, exists := c.Get("user")
+	if !exists {
+		return nil, errors.Unauthorized("unauthorized")
+	}
+
+	user, ok := userValue.(*entity.User)
+	if !ok {
+		return nil, errors.Unauthorized("unauthorized")
+	}
+
+	return user, nil
+}

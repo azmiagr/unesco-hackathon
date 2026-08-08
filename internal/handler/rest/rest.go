@@ -35,6 +35,14 @@ func (r *Rest) MountEndpoint() {
 	auth.POST("/register/avatar", r.SelectRegisterAvatar)
 	auth.POST("/register/complete", r.CompleteRegisterProfile)
 	auth.POST("/login", r.Login)
+
+	admin := baseUrl.Group("/admin")
+	admin.Use(r.middleware.AuthenticateUser, r.middleware.OnlyAdmin())
+	admin.GET("/users", r.ListAdminUsers)
+	admin.GET("/users/:userID", r.GetAdminUserDetail)
+	admin.PATCH("/users/:userID/access", r.UpdateAdminUserAccess)
+	admin.DELETE("/users/:userID", r.HardDeleteAdminUser)
+
 }
 
 func (r *Rest) Run() {
