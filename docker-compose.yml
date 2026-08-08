@@ -1,0 +1,50 @@
+name: unesco-hackathon
+
+services:
+  app:
+    image: ghcr.io/${GITHUB_REPOSITORY:-azmiagr/unesco-hackathon}:latest
+    container_name: unesco-hackathon-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8081}:${PORT:-8081}"
+    env_file:
+      - .env
+    environment:
+      ADDRESS: 0.0.0.0
+      PORT: ${PORT:-8081}
+      DB_HOST: db
+      DB_PORT: 3306
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - unesco-hackathon-net
+
+  db:
+    image: mariadb:11.4
+    container_name: unesco-hackathon-db
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3307:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MARIADB_DATABASE: ${DB_NAME:-unesco-hackathon}
+      MARIADB_USER: ${DB_USER:-unesco_hackathon_user}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-unesco_hackathon_pass}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - unesco-hackathon-net
+
+volumes:
+  db_data:
+
+networks:
+  unesco-hackathon-net:
+    driver: bridge
