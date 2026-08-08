@@ -19,3 +19,15 @@ type User struct {
 	UserProfile UserProfile `gorm:"foreignKey:UserID;references:UserID;constraint:onDelete:CASCADE"`
 	OtpCodes    []OtpCode   `gorm:"foreignKey:UserID;references:UserID;constraint:onDelete:CASCADE"`
 }
+
+type AdminLoginOtpSession struct {
+	AdminLoginOtpSessionID uuid.UUID  `json:"admin_login_otp_session_id" gorm:"type:varchar(36);primaryKey"`
+	UserID                 uuid.UUID  `json:"user_id" gorm:"type:varchar(36);not null;index"`
+	SessionTokenHash       string     `json:"-" gorm:"type:varchar(64);not null;uniqueIndex"`
+	OtpCodeHash            string     `json:"-" gorm:"type:varchar(64);not null"`
+	ExpiresAt              time.Time  `json:"expires_at" gorm:"not null;index"`
+	VerifiedAt             *time.Time `json:"verified_at"`
+	RevokedAt              *time.Time `json:"revoked_at"`
+	CreatedAt              time.Time  `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt              time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
+}

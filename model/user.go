@@ -12,6 +12,12 @@ type GetUserParam struct {
 	Username string    `json:"-"`
 }
 
+type GetAdminLoginOtpSessionParam struct {
+	AdminLoginOtpSessionID uuid.UUID
+	UserID                 uuid.UUID
+	SessionTokenHash       string
+}
+
 type RegisterRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=8"`

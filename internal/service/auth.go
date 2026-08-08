@@ -24,6 +24,7 @@ import (
 const (
 	registerSessionTTL = 24 * time.Hour
 	registerOtpTTL     = 10 * time.Minute
+	adminLoginOtpTTL   = 10 * time.Minute
 )
 
 type IAuthService interface {
@@ -33,6 +34,7 @@ type IAuthService interface {
 	CompleteRegisterProfile(sessionToken string, req model.CompleteRegisterProfileRequest) (*model.CompleteRegisterResult, error)
 	GetRegisterSession(sessionToken string) (*model.RegisterSessionResponse, error)
 	Login(req model.LoginRequest) (*model.LoginResponse, error)
+	VerifyAdminLoginOtp(sessionToken string, req model.VerifyAdminLoginOtpRequest) (*model.LoginResponse, error)
 }
 
 type AuthService struct {
@@ -395,13 +397,136 @@ func (s *AuthService) Login(req model.LoginRequest) (*model.LoginResponse, error
 		return nil, appErrors.InternalServer("failed to get role")
 	}
 
+	if role.RoleName == constants.RoleAdmin {
+		return s.startAdminLoginOtp(user)
+	}
+
 	token, err := s.jwtAuth.CreateJWTToken(user.UserID, role.RoleName)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to create jwt token")
 	}
 
 	return &model.LoginResponse{
-		Token: token,
+		Token:       token,
+		RequiresOtp: false,
+	}, nil
+}
+
+func (s *AuthService) VerifyAdminLoginOtp(sessionToken string, req model.VerifyAdminLoginOtpRequest) (*model.LoginResponse, error) {
+	sessionToken = strings.TrimSpace(sessionToken)
+	if sessionToken == "" {
+		return nil, appErrors.Unauthorized("missing admin login session token")
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	session, err := s.userRepo.GetAdminLoginOtpSessionForUpdate(tx, model.GetAdminLoginOtpSessionParam{
+		SessionTokenHash: hashString(sessionToken),
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.Unauthorized("invalid admin login session token")
+		}
+		return nil, appErrors.InternalServer("failed to get admin login otp session")
+	}
+
+	if session.RevokedAt != nil {
+		return nil, appErrors.Unauthorized("admin login session revoked")
+	}
+	if session.VerifiedAt != nil {
+		return nil, appErrors.Conflict("admin login session already verified")
+	}
+	if session.ExpiresAt.Before(time.Now().UTC()) {
+		return nil, appErrors.Unauthorized("admin login otp expired")
+	}
+	if session.OtpCodeHash != hashString(req.Code) {
+		return nil, appErrors.BadRequest("invalid otp code")
+	}
+
+	user, err := s.userRepo.GetUser(tx, model.GetUserParam{
+		UserID: session.UserID,
+	})
+	if err != nil {
+		return nil, appErrors.Unauthorized("admin user not found")
+	}
+	if user.Status != "active" {
+		return nil, appErrors.Unauthorized("account is not active")
+	}
+
+	role, err := s.roleRepo.GetRole(tx, user.RoleID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get role")
+	}
+	if role.RoleName != constants.RoleAdmin {
+		return nil, appErrors.Forbidden("user is not admin")
+	}
+
+	now := time.Now().UTC()
+	session.VerifiedAt = &now
+	session.OtpCodeHash = ""
+	if err := s.userRepo.UpdateAdminLoginOtpSession(tx, session); err != nil {
+		return nil, appErrors.InternalServer("failed to verify admin login otp session")
+	}
+
+	token, err := s.jwtAuth.CreateJWTToken(user.UserID, role.RoleName)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to create jwt token")
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	return &model.LoginResponse{
+		Token:       token,
+		RequiresOtp: false,
+	}, nil
+}
+
+func (s *AuthService) startAdminLoginOtp(user *entity.User) (*model.LoginResponse, error) {
+	sessionToken, err := generateSecureToken(32)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to generate session token")
+	}
+
+	otpCode := mail.GenerateCode()
+	now := time.Now().UTC()
+	session := &entity.AdminLoginOtpSession{
+		AdminLoginOtpSessionID: uuid.New(),
+		UserID:                 user.UserID,
+		SessionTokenHash:       hashString(sessionToken),
+		OtpCodeHash:            hashString(otpCode),
+		ExpiresAt:              now.Add(adminLoginOtpTTL),
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	err = s.userRepo.RevokeActiveAdminLoginOtpSessions(tx, user.UserID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to revoke previous admin login otp")
+	}
+
+	err = s.userRepo.CreateAdminLoginOtpSession(tx, session)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to create admin login otp session")
+	}
+
+	err = mail.SendAdminLoginOtpEmail(user.Email, user.Email, otpCode)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to send admin login otp")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.LoginResponse{
+		RequiresOtp:  true,
+		Email:        user.Email,
+		SessionToken: sessionToken,
 	}, nil
 }
 

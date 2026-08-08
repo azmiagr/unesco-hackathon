@@ -56,5 +56,12 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token string `json:"token"`
+	Token        string `json:"token,omitempty"`
+	RequiresOtp  bool   `json:"requires_otp"`
+	Email        string `json:"email,omitempty"`
+	SessionToken string `json:"-"`
+}
+
+type VerifyAdminLoginOtpRequest struct {
+	Code string `json:"code" binding:"required,len=6"`
 }

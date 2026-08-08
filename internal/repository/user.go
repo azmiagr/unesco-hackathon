@@ -12,6 +12,10 @@ type IUserRepository interface {
 	GetUser(tx *gorm.DB, param model.GetUserParam) (*entity.User, error)
 	CreateUser(tx *gorm.DB, user *entity.User) error
 	UpdateUser(tx *gorm.DB, user *entity.User) error
+	CreateAdminLoginOtpSession(tx *gorm.DB, session *entity.AdminLoginOtpSession) error
+	GetAdminLoginOtpSessionForUpdate(tx *gorm.DB, param model.GetAdminLoginOtpSessionParam) (*entity.AdminLoginOtpSession, error)
+	UpdateAdminLoginOtpSession(tx *gorm.DB, session *entity.AdminLoginOtpSession) error
+	RevokeActiveAdminLoginOtpSessions(tx *gorm.DB, userID uuid.UUID) error
 	ListUsers(tx *gorm.DB, param model.AdminListUsersParam) ([]model.AdminUserListRow, int64, error)
 	GetUserDetail(tx *gorm.DB, userID uuid.UUID) (*model.AdminUserDetailRow, error)
 	GetUserForUpdate(tx *gorm.DB, userID uuid.UUID) (*entity.User, error)
@@ -59,6 +63,53 @@ func (r *UserRepository) CreateUser(tx *gorm.DB, user *entity.User) error {
 
 func (r *UserRepository) UpdateUser(tx *gorm.DB, user *entity.User) error {
 	err := tx.Debug().Save(user).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *UserRepository) CreateAdminLoginOtpSession(tx *gorm.DB, session *entity.AdminLoginOtpSession) error {
+	err := tx.Debug().Create(session).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *UserRepository) GetAdminLoginOtpSessionForUpdate(tx *gorm.DB, param model.GetAdminLoginOtpSessionParam) (*entity.AdminLoginOtpSession, error) {
+	var session entity.AdminLoginOtpSession
+	query := tx.Clauses(clause.Locking{Strength: "UPDATE"})
+
+	if param.AdminLoginOtpSessionID != uuid.Nil {
+		query = query.Where("admin_login_otp_session_id = ?", param.AdminLoginOtpSessionID)
+	}
+	if param.UserID != uuid.Nil {
+		query = query.Where("user_id = ?", param.UserID)
+	}
+	if param.SessionTokenHash != "" {
+		query = query.Where("session_token_hash = ?", param.SessionTokenHash)
+	}
+
+	if err := query.First(&session).Error; err != nil {
+		return nil, err
+	}
+
+	return &session, nil
+}
+
+func (r *UserRepository) UpdateAdminLoginOtpSession(tx *gorm.DB, session *entity.AdminLoginOtpSession) error {
+	err := tx.Debug().Save(session).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *UserRepository) RevokeActiveAdminLoginOtpSessions(tx *gorm.DB, userID uuid.UUID) error {
+	err := tx.Debug().Model(&entity.AdminLoginOtpSession{}).
+		Where("user_id = ? AND verified_at IS NULL AND revoked_at IS NULL", userID).
+		Update("revoked_at", gorm.Expr("UTC_TIMESTAMP()")).Error
 	if err != nil {
 		return err
 	}

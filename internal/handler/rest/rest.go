@@ -35,6 +35,7 @@ func (r *Rest) MountEndpoint() {
 	auth.POST("/register/avatar", r.SelectRegisterAvatar)
 	auth.POST("/register/complete", r.CompleteRegisterProfile)
 	auth.POST("/login", r.Login)
+	auth.POST("/login/admin/verify-otp", r.VerifyAdminLoginOtp)
 
 	admin := baseUrl.Group("/admin")
 	admin.Use(r.middleware.AuthenticateUser, r.middleware.OnlyAdmin())

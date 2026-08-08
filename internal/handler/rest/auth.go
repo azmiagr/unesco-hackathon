@@ -129,5 +129,31 @@ func (r *Rest) Login(c *gin.Context) {
 		return
 	}
 
+	if result.SessionToken != "" {
+		c.Header(registerSessionHeader, result.SessionToken)
+	}
+
 	response.Success(c, http.StatusOK, "login success", result)
+}
+
+func (r *Rest) VerifyAdminLoginOtp(c *gin.Context) {
+	sessionToken := c.GetHeader(registerSessionHeader)
+	if sessionToken == "" {
+		response.HandleError(c, errors.Unauthorized("missing admin login session token"))
+		return
+	}
+
+	var req model.VerifyAdminLoginOtpRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, errors.BadRequest("invalid admin login otp request"))
+		return
+	}
+
+	result, err := r.service.AuthService.VerifyAdminLoginOtp(sessionToken, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "admin login verified", result)
 }
