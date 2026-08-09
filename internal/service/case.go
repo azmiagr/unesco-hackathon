@@ -2,22 +2,32 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"mime/multipart"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/azmiagr/unesco-hackathon/entity"
 	"github.com/azmiagr/unesco-hackathon/internal/repository"
 	"github.com/azmiagr/unesco-hackathon/model"
 	"github.com/azmiagr/unesco-hackathon/pkg/database/mariadb"
 	appErrors "github.com/azmiagr/unesco-hackathon/pkg/errors"
+	"github.com/azmiagr/unesco-hackathon/pkg/helper"
 	"github.com/azmiagr/unesco-hackathon/pkg/supabase"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-const maxCaseThumbnailSize = 5 * 1024 * 1024
+const (
+	maxCaseThumbnailSize     = 5 * 1024 * 1024
+	maxEvidenceImageSize     = 5 * 1024 * 1024
+	maxSocialPostLabelLength = 150
+	defaultAdminCaseLimit    = 10
+	maxAdminCaseLimit        = 100
+)
 
 var allowedCaseThemes = map[string]bool{
 	model.CaseThemeMisleadingHealthAdvice: true,
@@ -55,28 +65,40 @@ var allowedCaseGenerationSources = map[string]bool{
 	model.CaseGenerationAIAssisted: true,
 }
 
+var allowedCaseStatuses = map[string]bool{
+	model.CaseStatusDraft:     true,
+	model.CaseStatusPublished: true,
+	model.CaseStatusArchived:  true,
+}
+
 type ICaseService interface {
 	CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCreateCaseRequest) (*model.AdminCreateCaseResponse, error)
+	ListCasesByAdmin(req model.AdminListCasesRequest) (*model.AdminListCasesResponse, error)
+	GetCaseDetailByAdmin(caseID uuid.UUID) (*model.AdminCaseDetailResponse, error)
 	GetCaseLookups() (*model.AdminCaseLookupsResponse, error)
+	CreateSocialPostEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateSocialPostEvidenceRequest) (*model.AdminCreateSocialPostEvidenceResponse, error)
 }
 
 type CaseService struct {
-	db              *gorm.DB
-	caseRepo        repository.ICaseRepository
-	caseVersionRepo repository.ICaseVersionRepository
-	storage         supabase.Interface
+	db               *gorm.DB
+	caseRepo         repository.ICaseRepository
+	caseVersionRepo  repository.ICaseVersionRepository
+	caseEvidenceRepo repository.ICaseEvidenceRepository
+	storage          supabase.Interface
 }
 
 func NewCaseService(
 	caseRepo repository.ICaseRepository,
 	caseVersionRepo repository.ICaseVersionRepository,
+	caseEvidenceRepo repository.ICaseEvidenceRepository,
 	storage supabase.Interface,
 ) ICaseService {
 	return &CaseService{
-		db:              mariadb.Connection,
-		caseRepo:        caseRepo,
-		caseVersionRepo: caseVersionRepo,
-		storage:         storage,
+		db:               mariadb.Connection,
+		caseRepo:         caseRepo,
+		caseVersionRepo:  caseVersionRepo,
+		caseEvidenceRepo: caseEvidenceRepo,
+		storage:          storage,
 	}
 }
 
@@ -85,8 +107,6 @@ func (s *CaseService) CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCr
 		return nil, appErrors.Unauthorized("unauthorized")
 	}
 
-	title := strings.TrimSpace(req.Title)
-	shortDescription := strings.TrimSpace(req.ShortDescription)
 	theme := strings.ToLower(strings.TrimSpace(req.Theme))
 	themeOtherText := strings.TrimSpace(req.ThemeOtherText)
 	competencyFocus := strings.ToLower(strings.TrimSpace(req.CompetencyFocus))
@@ -95,13 +115,16 @@ func (s *CaseService) CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCr
 	generationSource := strings.ToLower(strings.TrimSpace(req.GenerationSource))
 	thumbnailPrompt := strings.TrimSpace(req.ThumbnailPrompt)
 	unlockRequirement := strings.TrimSpace(req.UnlockRequirement)
+	aiModel := strings.TrimSpace(req.AIModel)
 
-	if title == "" {
-		return nil, appErrors.BadRequest("title is required")
+	title, err := helper.RequireTrimmedString(req.Title, "title is required")
+	if err != nil {
+		return nil, err
 	}
 
-	if shortDescription == "" {
-		return nil, appErrors.BadRequest("short description is required")
+	shortDescription, err := helper.RequireTrimmedString(req.ShortDescription, "short description is required")
+	if err != nil {
+		return nil, err
 	}
 
 	if !allowedCaseThemes[theme] {
@@ -109,7 +132,10 @@ func (s *CaseService) CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCr
 	}
 
 	if theme == model.CaseThemeOther && themeOtherText == "" {
-		return nil, appErrors.BadRequest("theme other text is required")
+		themeOtherText, err = helper.RequireTrimmedString(req.ThemeOtherText, "theme other text is required")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if theme != model.CaseThemeOther {
@@ -188,6 +214,7 @@ func (s *CaseService) CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCr
 		DifficultyLevel:          difficultyLevel,
 		RiskLevel:                riskLevel,
 		EstimatedDurationMinutes: req.EstimatedDurationMinutes,
+		AIModel:                  optionalString(aiModel),
 		MinimumLevel:             minimumLevel,
 		MinimumReputation:        minimumReputation,
 		UnlockRequirement:        unlockRequirementValue,
@@ -207,7 +234,6 @@ func (s *CaseService) CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCr
 		CaseID:        caseEntity.CaseID,
 		VersionNumber: model.InitialCaseVersionNumber,
 		Status:        model.CaseStatusDraft,
-		Evidence:      model.EmptyJSONArray,
 		Questions:     model.EmptyJSONArray,
 		CreatedBy:     adminUserID,
 	}
@@ -234,9 +260,120 @@ func (s *CaseService) CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCr
 		Status:           caseEntity.Status,
 		ThumbnailURL:     caseEntity.ThumbnailURL,
 		ThumbnailPrompt:  caseEntity.ThumbnailPrompt,
+		AIModel:          caseEntity.AIModel,
 		GenerationSource: caseEntity.GenerationSource,
 		CreatedBy:        caseEntity.CreatedBy,
 		CreatedAt:        caseEntity.CreatedAt,
+	}, nil
+}
+
+func (s *CaseService) ListCasesByAdmin(req model.AdminListCasesRequest) (*model.AdminListCasesResponse, error) {
+	page := req.Page
+	if page < 1 {
+		page = 1
+	}
+
+	limit := req.Limit
+	if limit < 1 {
+		limit = defaultAdminCaseLimit
+	}
+	if limit > maxAdminCaseLimit {
+		limit = maxAdminCaseLimit
+	}
+
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if status != "" && !allowedCaseStatuses[status] {
+		return nil, appErrors.BadRequest("invalid status filter")
+	}
+
+	theme := strings.ToLower(strings.TrimSpace(req.Theme))
+	if theme != "" && !allowedCaseThemes[theme] {
+		return nil, appErrors.BadRequest("invalid theme filter")
+	}
+
+	competencyFocus := strings.ToLower(strings.TrimSpace(req.CompetencyFocus))
+	if competencyFocus != "" && !allowedCaseCompetencyFocuses[competencyFocus] {
+		return nil, appErrors.BadRequest("invalid competency focus filter")
+	}
+
+	difficultyLevel := strings.ToLower(strings.TrimSpace(req.DifficultyLevel))
+	if difficultyLevel != "" && !allowedCaseDifficultyLevels[difficultyLevel] {
+		return nil, appErrors.BadRequest("invalid difficulty level filter")
+	}
+
+	riskLevel := strings.ToLower(strings.TrimSpace(req.RiskLevel))
+	if riskLevel != "" && !allowedCaseRiskLevels[riskLevel] {
+		return nil, appErrors.BadRequest("invalid risk level filter")
+	}
+
+	generationSource := strings.ToLower(strings.TrimSpace(req.GenerationSource))
+	if generationSource != "" && !allowedCaseGenerationSources[generationSource] {
+		return nil, appErrors.BadRequest("invalid generation source filter")
+	}
+
+	param := model.AdminListCasesParam{
+		Search:           strings.TrimSpace(req.Search),
+		Status:           status,
+		Theme:            theme,
+		CompetencyFocus:  competencyFocus,
+		DifficultyLevel:  difficultyLevel,
+		RiskLevel:        riskLevel,
+		GenerationSource: generationSource,
+		Limit:            limit,
+		Offset:           (page - 1) * limit,
+	}
+
+	cases, total, err := s.caseRepo.ListAdminCases(s.db, param)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to list cases")
+	}
+
+	for i := range cases {
+		cases[i].VersionLabel = optionalVersionLabel(cases[i].VersionNumber)
+	}
+
+	totalPages := 0
+	if total > 0 {
+		totalPages = int(math.Ceil(float64(total) / float64(limit)))
+	}
+
+	return &model.AdminListCasesResponse{
+		Cases: cases,
+		Pagination: model.PaginationResponse{
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		},
+	}, nil
+}
+
+func (s *CaseService) GetCaseDetailByAdmin(caseID uuid.UUID) (*model.AdminCaseDetailResponse, error) {
+	if caseID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case id")
+	}
+
+	caseDetail, err := s.caseRepo.GetAdminCaseDetail(s.db, caseID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case detail")
+	}
+
+	caseDetail.VersionLabel = optionalVersionLabel(caseDetail.VersionNumber)
+
+	evidences := []model.AdminCaseEvidenceListRow{}
+	if caseDetail.CurrentCaseVersionID != nil {
+		evidences, err = s.caseEvidenceRepo.ListAdminCaseEvidenceRows(s.db, *caseDetail.CurrentCaseVersionID)
+		if err != nil {
+			return nil, appErrors.InternalServer("failed to list case evidences")
+		}
+	}
+
+	return &model.AdminCaseDetailResponse{
+		Case:      *caseDetail,
+		Evidences: evidences,
 	}, nil
 }
 
@@ -276,7 +413,252 @@ func (s *CaseService) GetCaseLookups() (*model.AdminCaseLookupsResponse, error) 
 	}, nil
 }
 
+func (s *CaseService) CreateSocialPostEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	req model.AdminCreateSocialPostEvidenceRequest,
+) (*model.AdminCreateSocialPostEvidenceResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	if caseID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case id")
+	}
+
+	if caseVersionID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case version id")
+	}
+
+	label, err := helper.RequireTrimmedString(req.Label, "label is required")
+	if err != nil {
+		return nil, err
+	}
+
+	authorName, err := helper.RequireTrimmedString(req.AuthorName, "author name is required")
+	if err != nil {
+		return nil, err
+	}
+
+	authorHandle, err := helper.RequireTrimmedString(req.AuthorHandle, "author handle is required")
+	if err != nil {
+		return nil, err
+	}
+
+	platform, err := helper.RequireTrimmedString(req.Platform, "platform is required")
+	if err != nil {
+		return nil, err
+	}
+
+	postText, err := helper.RequireTrimmedString(req.PostText, "post text is required")
+	if err != nil {
+		return nil, err
+	}
+
+	imagePrompt := strings.TrimSpace(req.ImagePrompt)
+
+	if len(label) > maxSocialPostLabelLength {
+		return nil, appErrors.BadRequest("label is too long")
+	}
+
+	credibilityTags, credibilityTagsJSON, err := normalizeCredibilityTags(req.CredibilityTags)
+	if err != nil {
+		return nil, err
+	}
+
+	timestamp, err := parseEvidenceTimestamp(req.Timestamp)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.LikesCount < 0 || req.SharesCount < 0 || req.CommentsCount < 0 {
+		return nil, appErrors.BadRequest("engagement counts cannot be negative")
+	}
+
+	imageURL, err := s.uploadEvidenceImage(req.Image)
+	if err != nil {
+		return nil, err
+	}
+
+	shouldDeleteImage := imageURL != nil
+	defer func() {
+		if shouldDeleteImage && imageURL != nil {
+			_ = supabase.DeleteFileIfPresent(s.storage, *imageURL)
+		}
+	}()
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	caseVersion, err := s.caseVersionRepo.GetCaseVersionForUpdate(tx, caseVersionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case version not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case version")
+	}
+
+	if caseVersion.CaseID != caseID {
+		return nil, appErrors.NotFound("case version not found")
+	}
+
+	if caseVersion.Status != model.CaseStatusDraft {
+		return nil, appErrors.Conflict("case version is not editable")
+	}
+
+	evidence := &entity.CaseEvidence{
+		CaseEvidenceID:  uuid.New(),
+		CaseVersionID:   caseVersion.CaseVersionID,
+		TemplateType:    model.CaseEvidenceTemplateSocialPost,
+		Label:           label,
+		CredibilityTags: credibilityTagsJSON,
+		IsCritical:      req.IsCritical,
+		SortOrder:       req.SortOrder,
+	}
+
+	socialPost := &entity.CaseEvidenceSocialPost{
+		CaseEvidenceID:    evidence.CaseEvidenceID,
+		AuthorName:        authorName,
+		AuthorHandle:      authorHandle,
+		Platform:          platform,
+		PostText:          postText,
+		Timestamp:         timestamp,
+		LikesCount:        req.LikesCount,
+		SharesCount:       req.SharesCount,
+		CommentsCount:     req.CommentsCount,
+		IsVerifiedAccount: req.IsVerifiedAccount,
+		ImagePrompt:       optionalString(imagePrompt),
+		ImageURL:          imageURL,
+	}
+
+	err = s.caseEvidenceRepo.CreateSocialPostEvidence(tx, evidence, socialPost)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to create social post evidence")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	shouldDeleteImage = false
+
+	return &model.AdminCreateSocialPostEvidenceResponse{
+		Evidence: mapSocialPostEvidenceResponse(evidence, socialPost, credibilityTags),
+	}, nil
+}
+
+func normalizeCredibilityTags(raw string) ([]string, string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, "", appErrors.BadRequest("credibility tags are required")
+	}
+
+	var tags []string
+	if err := json.Unmarshal([]byte(raw), &tags); err != nil {
+		return nil, "", appErrors.BadRequest("credibility tags must be a valid json array")
+	}
+
+	normalizedTags := make([]string, 0, len(tags))
+	seen := map[string]bool{}
+
+	for _, tag := range tags {
+		normalizedTag := strings.ToLower(strings.TrimSpace(tag))
+		if normalizedTag == "" {
+			continue
+		}
+
+		if seen[normalizedTag] {
+			continue
+		}
+
+		seen[normalizedTag] = true
+		normalizedTags = append(normalizedTags, normalizedTag)
+	}
+
+	if len(normalizedTags) == 0 {
+		return nil, "", appErrors.BadRequest("credibility tags are required")
+	}
+
+	payload, err := json.Marshal(normalizedTags)
+	if err != nil {
+		return nil, "", appErrors.InternalServer("failed to normalize credibility tags")
+	}
+
+	return normalizedTags, string(payload), nil
+}
+
+func parseEvidenceTimestamp(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, appErrors.BadRequest("timestamp is required")
+	}
+
+	layouts := []string{
+		time.RFC3339,
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05",
+	}
+
+	for _, layout := range layouts {
+		value, err := time.Parse(layout, raw)
+		if err == nil {
+			return value.UTC(), nil
+		}
+	}
+
+	return time.Time{}, appErrors.BadRequest("invalid timestamp")
+}
+
+func mapSocialPostEvidenceResponse(
+	evidence *entity.CaseEvidence,
+	socialPost *entity.CaseEvidenceSocialPost,
+	credibilityTags []string,
+) model.AdminSocialPostEvidenceResponse {
+	return model.AdminSocialPostEvidenceResponse{
+		CaseEvidenceID:    evidence.CaseEvidenceID,
+		CaseVersionID:     evidence.CaseVersionID,
+		TemplateType:      evidence.TemplateType,
+		Label:             evidence.Label,
+		CredibilityTags:   credibilityTags,
+		IsCritical:        evidence.IsCritical,
+		SortOrder:         evidence.SortOrder,
+		AuthorName:        socialPost.AuthorName,
+		AuthorHandle:      socialPost.AuthorHandle,
+		Platform:          socialPost.Platform,
+		PostText:          socialPost.PostText,
+		Timestamp:         socialPost.Timestamp,
+		LikesCount:        socialPost.LikesCount,
+		SharesCount:       socialPost.SharesCount,
+		CommentsCount:     socialPost.CommentsCount,
+		IsVerifiedAccount: socialPost.IsVerifiedAccount,
+		ImagePrompt:       socialPost.ImagePrompt,
+		ImageURL:          socialPost.ImageURL,
+		CreatedAt:         evidence.CreatedAt,
+		UpdatedAt:         evidence.UpdatedAt,
+	}
+}
+
 func (s *CaseService) uploadCaseThumbnail(file *multipart.FileHeader) (*string, error) {
+	return s.uploadOptionalImage(
+		file,
+		maxCaseThumbnailSize,
+		"thumbnail size exceeds 5MB limit",
+		"failed to upload thumbnail",
+	)
+}
+
+func (s *CaseService) uploadEvidenceImage(file *multipart.FileHeader) (*string, error) {
+	return s.uploadOptionalImage(
+		file,
+		maxEvidenceImageSize,
+		"evidence image size exceeds 5MB limit",
+		"failed to upload evidence image",
+	)
+}
+
+func (s *CaseService) uploadOptionalImage(file *multipart.FileHeader, maxSize int64, sizeErrMessage string, uploadErrMessage string) (*string, error) {
 	if file == nil {
 		return nil, nil
 	}
@@ -284,11 +666,11 @@ func (s *CaseService) uploadCaseThumbnail(file *multipart.FileHeader) (*string, 
 	url, err := supabase.UploadOptionalImage(
 		s.storage,
 		file,
-		maxCaseThumbnailSize,
-		"thumbnail size exceeds 5MB limit",
+		maxSize,
+		sizeErrMessage,
 	)
 	if err != nil {
-		return nil, appErrors.BadRequest("failed to upload thumbnail")
+		return nil, appErrors.BadRequest(uploadErrMessage)
 	}
 
 	return &url, nil
@@ -350,4 +732,13 @@ func slugify(value string) string {
 
 func formatCaseVersionLabel(versionNumber int) string {
 	return fmt.Sprintf("%d.0", versionNumber)
+}
+
+func optionalVersionLabel(versionNumber *int) *string {
+	if versionNumber == nil {
+		return nil
+	}
+
+	label := formatCaseVersionLabel(*versionNumber)
+	return &label
 }

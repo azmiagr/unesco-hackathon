@@ -12,6 +12,8 @@ func Migrate(db *gorm.DB) error {
 		&entity.User{},
 		&entity.Case{},
 		&entity.CaseVersion{},
+		&entity.CaseEvidence{},
+		&entity.CaseEvidenceSocialPost{},
 		&entity.AdminLoginOtpSession{},
 		&entity.OtpCode{},
 		&entity.Avatar{},

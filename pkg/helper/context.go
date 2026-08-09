@@ -16,6 +16,15 @@ func ParseUserIDParam(c *gin.Context) (uuid.UUID, error) {
 	return userID, nil
 }
 
+func ParseUUIDParam(c *gin.Context, paramName string, message string) (uuid.UUID, error) {
+	value, err := uuid.Parse(c.Param(paramName))
+	if err != nil {
+		return uuid.Nil, errors.BadRequest(message)
+	}
+
+	return value, nil
+}
+
 func GetAuthenticatedUser(c *gin.Context) (*entity.User, error) {
 	userValue, exists := c.Get("user")
 	if !exists {

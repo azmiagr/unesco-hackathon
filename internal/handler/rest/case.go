@@ -44,6 +44,39 @@ func (r *Rest) CreateCaseByAdmin(c *gin.Context) {
 	response.Success(c, http.StatusCreated, "case created", result)
 }
 
+func (r *Rest) ListCasesByAdmin(c *gin.Context) {
+	var req model.AdminListCasesRequest
+	err := c.ShouldBindQuery(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid list cases request"))
+		return
+	}
+
+	result, err := r.service.CaseService.ListCasesByAdmin(req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "cases retrieved", result)
+}
+
+func (r *Rest) GetCaseDetailByAdmin(c *gin.Context) {
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.CaseService.GetCaseDetailByAdmin(caseID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "case detail retrieved", result)
+}
+
 func (r *Rest) GetCaseLookupsByAdmin(c *gin.Context) {
 	result, err := r.service.CaseService.GetCaseLookups()
 	if err != nil {
@@ -52,4 +85,49 @@ func (r *Rest) GetCaseLookupsByAdmin(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, "case lookups retrieved", result)
+}
+
+func (r *Rest) CreateSocialPostEvidenceByAdmin(c *gin.Context) {
+	adminUser, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseVersionID, err := helper.ParseUUIDParam(c, "caseVersionID", "invalid case version id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.AdminCreateSocialPostEvidenceRequest
+	err = c.ShouldBind(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid create social post evidence request"))
+		return
+	}
+
+	image, err := c.FormFile("image")
+	if err != nil {
+		if !stdErrors.Is(err, http.ErrMissingFile) {
+			response.HandleError(c, appErrors.BadRequest("invalid evidence image file"))
+			return
+		}
+	} else {
+		req.Image = image
+	}
+
+	result, err := r.service.CaseService.CreateSocialPostEvidenceByAdmin(adminUser.UserID, caseID, caseVersionID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, "social post evidence created", result)
 }

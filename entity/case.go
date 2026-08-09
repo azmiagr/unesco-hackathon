@@ -19,6 +19,7 @@ type Case struct {
 	DifficultyLevel          string         `json:"difficulty_level" gorm:"type:enum('low','medium','high');not null;index"`
 	RiskLevel                string         `json:"risk_level" gorm:"type:enum('low','medium','high');not null;index"`
 	EstimatedDurationMinutes int            `json:"estimated_duration_minutes" gorm:"type:int;not null"`
+	AIModel                  *string        `json:"ai_model" gorm:"type:varchar(100);index"`
 	MinimumLevel             int            `json:"minimum_level" gorm:"type:int;not null;default:1"`
 	MinimumReputation        float64        `json:"minimum_reputation" gorm:"type:decimal(8,2);not null;default:0"`
 	UnlockRequirement        *string        `json:"unlock_requirement" gorm:"type:json"`

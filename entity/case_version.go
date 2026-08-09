@@ -13,7 +13,6 @@ type CaseVersion struct {
 	VersionNumber int            `json:"version_number" gorm:"type:int;not null;index"`
 	Status        string         `json:"status" gorm:"type:enum('draft','published','archived');not null;default:'draft';index"`
 	Briefing      *string        `json:"briefing" gorm:"type:json"`
-	Evidence      string         `json:"evidence" gorm:"type:json;not null"`
 	Questions     string         `json:"questions" gorm:"type:json;not null"`
 	ChatbotConfig *string        `json:"chatbot_config" gorm:"type:json"`
 	ScoringRule   *string        `json:"scoring_rule" gorm:"type:json"`
@@ -23,4 +22,6 @@ type CaseVersion struct {
 	CreatedAt     time.Time      `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt     time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
 	DeletedAt     gorm.DeletedAt `json:"deleted_at" gorm:"index"`
+
+	Evidences []CaseEvidence `gorm:"foreignKey:CaseVersionID;references:CaseVersionID;constraint:onDelete:CASCADE"`
 }

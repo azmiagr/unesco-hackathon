@@ -15,6 +15,7 @@ import (
 	constants "github.com/azmiagr/unesco-hackathon/pkg/constant"
 	"github.com/azmiagr/unesco-hackathon/pkg/database/mariadb"
 	appErrors "github.com/azmiagr/unesco-hackathon/pkg/errors"
+	"github.com/azmiagr/unesco-hackathon/pkg/helper"
 	"github.com/azmiagr/unesco-hackathon/pkg/jwt"
 	"github.com/azmiagr/unesco-hackathon/pkg/mail"
 	"github.com/google/uuid"
@@ -70,9 +71,13 @@ func NewAuthService(
 }
 
 func (s *AuthService) StartRegister(req model.StartRegisterRequest) (*model.RegisterAuthResult, error) {
-	email := strings.ToLower(strings.TrimSpace(req.Email))
+	email, err := helper.RequireTrimmedString(req.Email, "email is required")
+	if err != nil {
+		return nil, err
+	}
+	email = strings.ToLower(email)
 
-	_, err := s.userRepo.GetUser(s.db, model.GetUserParam{
+	_, err = s.userRepo.GetUser(s.db, model.GetUserParam{
 		Email: email,
 	})
 	if err != nil {
@@ -243,7 +248,11 @@ func (s *AuthService) SelectRegisterAvatar(sessionToken string, req model.Select
 }
 
 func (s *AuthService) CompleteRegisterProfile(sessionToken string, req model.CompleteRegisterProfileRequest) (*model.CompleteRegisterResult, error) {
-	username := strings.TrimSpace(req.Username)
+	username, err := helper.RequireTrimmedString(req.Username, "username is required")
+	if err != nil {
+		return nil, err
+	}
+
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
 		title = model.DefaultRegisterTitle
@@ -371,7 +380,11 @@ func (s *AuthService) GetRegisterSession(sessionToken string) (*model.RegisterSe
 }
 
 func (s *AuthService) Login(req model.LoginRequest) (*model.LoginResponse, error) {
-	email := strings.ToLower(strings.TrimSpace(req.Email))
+	email, err := helper.RequireTrimmedString(req.Email, "email is required")
+	if err != nil {
+		return nil, err
+	}
+	email = strings.ToLower(email)
 
 	user, err := s.userRepo.GetUser(s.db, model.GetUserParam{
 		Email: email,

@@ -49,7 +49,10 @@ func (r *Rest) MountEndpoint() {
 
 	cases := admin.Group("/cases")
 	cases.GET("/lookups", r.GetCaseLookupsByAdmin)
+	cases.GET("", r.ListCasesByAdmin)
+	cases.GET("/:caseID", r.GetCaseDetailByAdmin)
 	cases.POST("", r.CreateCaseByAdmin)
+	cases.POST("/:caseID/versions/:caseVersionID/evidences/social-post", r.CreateSocialPostEvidenceByAdmin)
 
 }
 

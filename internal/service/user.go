@@ -12,6 +12,7 @@ import (
 	constants "github.com/azmiagr/unesco-hackathon/pkg/constant"
 	"github.com/azmiagr/unesco-hackathon/pkg/database/mariadb"
 	appErrors "github.com/azmiagr/unesco-hackathon/pkg/errors"
+	"github.com/azmiagr/unesco-hackathon/pkg/helper"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -278,18 +279,19 @@ func (s *UserService) HardDeleteUser(adminUserID uuid.UUID, targetUserID uuid.UU
 }
 
 func (s *UserService) CreateUserByAdmin(req model.AdminCreateUserRequest) (*model.AdminCreateUserResponse, error) {
-	username := strings.TrimSpace(req.Username)
-	email := strings.ToLower(strings.TrimSpace(req.Email))
 	roleName := strings.ToLower(strings.TrimSpace(req.RoleName))
 	status := strings.ToLower(strings.TrimSpace(req.Status))
 
-	if username == "" {
-		return nil, appErrors.BadRequest("username is required")
+	username, err := helper.RequireTrimmedString(req.Username, "username is required")
+	if err != nil {
+		return nil, err
 	}
 
-	if email == "" {
-		return nil, appErrors.BadRequest("email is required")
+	email, err := helper.RequireTrimmedString(req.Email, "email is required")
+	if err != nil {
+		return nil, err
 	}
+	email = strings.ToLower(email)
 
 	if req.Password != req.PasswordConfirmation {
 		return nil, appErrors.BadRequest("password confirmation does not match")
@@ -391,19 +393,20 @@ func (s *UserService) UpdateUserByAdmin(adminUserID uuid.UUID, targetUserID uuid
 		return nil, appErrors.Forbidden("admin cannot update own account")
 	}
 
-	email := strings.ToLower(strings.TrimSpace(req.Email))
-	username := strings.TrimSpace(req.Username)
 	roleName := strings.ToLower(strings.TrimSpace(req.RoleName))
 	status := strings.ToLower(strings.TrimSpace(req.Status))
 	password := strings.TrimSpace(req.Password)
 	passwordConfirmation := strings.TrimSpace(req.PasswordConfirmation)
 
-	if email == "" {
-		return nil, appErrors.BadRequest("email is required")
+	email, err := helper.RequireTrimmedString(req.Email, "email is required")
+	if err != nil {
+		return nil, err
 	}
+	email = strings.ToLower(email)
 
-	if username == "" {
-		return nil, appErrors.BadRequest("username is required")
+	username, err := helper.RequireTrimmedString(req.Username, "username is required")
+	if err != nil {
+		return nil, err
 	}
 
 	if roleName == "" || !allowedAdminRoles[roleName] {
