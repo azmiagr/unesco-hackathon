@@ -9,6 +9,8 @@ type Repository struct {
 	UserProfileRepository         IUserProfileRepository
 	RegistrationSessionRepository IRegistrationSessionRepository
 	RoleRepository                IRoleRepository
+	CaseRepository                ICaseRepository
+	CaseVersionRepository         ICaseVersionRepository
 }
 
 func NewRepository(db *gorm.DB) *Repository {
@@ -19,5 +21,7 @@ func NewRepository(db *gorm.DB) *Repository {
 		UserProfileRepository:         NewUserProfileRepository(db),
 		RegistrationSessionRepository: NewRegistrationSessionRepository(db),
 		RoleRepository:                NewRoleRepository(db),
+		CaseRepository:                NewCaseRepository(db),
+		CaseVersionRepository:         NewCaseVersionRepository(db),
 	}
 }

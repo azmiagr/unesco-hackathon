@@ -8,9 +8,11 @@
 | | |
 |---|---|
 | **Konteks** | UNESCO Youth Hackathon |
-| **Versi Dokumen** | 1.0 |
+| **Versi Dokumen** | 2.0 (Konsolidasi) |
 | **Status** | Draft untuk Review |
-| **Tanggal** | 24 Juli 2026 |
+| **Tanggal** | 24 Juli 2026 (revisi konsolidasi terakhir mengikuti pembahasan Shop & Redeem serta Admin Console) |
+
+> **Catatan Konsolidasi:** Versi ini menggabungkan `PRD_KODEKABI_Jejak_Algoritma.md` (v1.0), `PRD_KODEKABI_Shop_Redeem_Addendum.md`, dan `PRD_KODEKABI_Admin_Console_Addendum.md` menjadi satu dokumen, dengan seluruh revisi terakhir sudah diterapkan: role `content_author` digabung ke `admin` (AUTH-05 direvisi), 2FA wajib untuk login admin, CMS Case tanpa tahap review terpisah, skema evidence tanpa field avatar, dan thumbnail case wajib per-case. Modul baru (Wallet, Shop, Redeem, Admin Console) ada di Bagian 19.
 
 ---
 
@@ -58,7 +60,8 @@
 16. [Roadmap dan Rencana Rilis](#16-roadmap-dan-rencana-rilis)
 17. [Referensi Alur Sistem](#17-referensi-alur-sistem)
 18. [Pertanyaan Terbuka dan Keputusan yang Diperlukan](#18-pertanyaan-terbuka-dan-keputusan-yang-diperlukan)
-19. [Lampiran](#19-lampiran)
+19. [Modul Tambahan: Shop, Redeem, dan Admin Console](#19-modul-tambahan-shop-redeem-dan-admin-console)
+20. [Lampiran](#20-lampiran)
 
 ---
 
@@ -339,7 +342,7 @@ Mengelola registrasi, autentikasi, sesi, dan otorisasi peran pengguna.
 | AUTH-02 | Login dengan kredensial | Pengguna login menggunakan identitas terdaftar. | Must | Login gagal menampilkan pesan generik (tidak membocorkan username/password mana yang salah); rate limit percobaan gagal. |
 | AUTH-03 | Manajemen sesi/token | Sistem menerbitkan token/sesi dengan masa berlaku dan mekanisme refresh. | Must | Token kedaluwarsa memaksa re-autentikasi; token disimpan aman di client. |
 | AUTH-04 | Logout & invalidasi token | Pengguna dapat logout dan token/sesi langsung tidak valid di backend. | Must | Request menggunakan token yang telah logout ditolak dengan 401. |
-| AUTH-05 | Role-based access control | Sistem membedakan peran player, content author, dan admin. | Should | Endpoint content authoring hanya dapat diakses role content author/admin. |
+| AUTH-05 | Role-based access control | Sistem membedakan peran player dan admin (direvisi dari tiga role — `content_author` digabung ke `admin`, lihat Bagian 19.2). | Should | Endpoint content authoring dan seluruh endpoint `/admin/*` hanya dapat diakses role admin. |
 | AUTH-06 | Consent & data minimization saat onboarding | Sistem mencatat persetujuan pengguna atas kebijakan privasi sebelum data gameplay pertama dikumpulkan. | Must | Tidak ada event gameplay yang tersimpan sebelum consent_status = true. |
 
 ### 9.2 User / Profile Module
@@ -439,6 +442,10 @@ Menyediakan perbandingan pencapaian antar pemain secara sehat dan privacy-safe.
 | LB-02 | Cohort ranking | Mendukung ranking dalam kelompok (per sekolah/komunitas) untuk pengguna sekunder. | Could | Fitur ini didorong ke fase pasca-MVP. |
 | LB-03 | Cached leaderboard | Leaderboard dilayani dari cache (Redis), bukan query langsung. | Must | Cache diinvalidasi/diperbarui setelah transaksi scoring berhasil. |
 | LB-04 | Tampilan privacy-safe | Leaderboard tidak menampilkan data sensitif atau identitas asli di luar username/avatar. | Must | Tidak ada field selain username, avatar, level, dan skor agregat yang ditampilkan publik. |
+
+### 9.11 Wallet, Shop, Redeem, dan Admin Console
+
+Modul Wallet, Shop, Redeem, serta seluruh modul Admin Console (User Management, Case CMS, Shop & Redeem CMS, Moderation, Dashboard Operasional, Konfigurasi Game, Tata Kelola AI, Leaderboard Admin, Audit Log, Pengumuman, Reporting) ditambahkan pasca-versi awal PRD ini. Requirement lengkap masing-masing modul (ID, deskripsi, prioritas, acceptance criteria) ada di **Bagian 19 — Modul Tambahan: Shop, Redeem, dan Admin Console**, agar tidak menduplikasi konten di dua tempat.
 
 ---
 ## 10. Non-Functional Requirements
@@ -677,9 +684,502 @@ AI mengembalikan sinyal semantik berikut (bukan skor akhir): mengakui ketidakpas
 
 ---
 
-## 19. Lampiran
+## 19. Modul Tambahan: Shop, Redeem, dan Admin Console
 
-### 19.1 Glosarium
+Bagian ini menggabungkan seluruh konten dari dua dokumen PRD Addendum (`PRD_KODEKABI_Shop_Redeem_Addendum.md` dan `PRD_KODEKABI_Admin_Console_Addendum.md`) ke dalam PRD utama, dengan revisi terakhir yang sudah disepakati: role `content_author` digabung ke `admin` (dua role total: `player`, `admin`), login admin wajib 2FA (password + OTP email), CMS Case tidak lagi memiliki tahap review terpisah dari editing, skema evidence tidak lagi memuat field avatar/foto profil, dan thumbnail case bersifat wajib per-case (prompt-assisted + upload manual), sedangkan evidence image tetap opsional.
+
+### 19.1 Shop & Redeem
+
+### 19.1.1 Ringkasan Fitur
+
+Shop & Redeem Center menambahkan lapisan insentif baru di luar XP, level, dan reputasi auditor yang sudah ada. Pemain mengumpulkan **Koin Auditor** dari aktivitas gameplay, lalu membelanjakannya melalui dua jalur berbeda:
+
+1. **Shop** — membeli item kosmetik (skin avatar, skin kota, tema chat, badge) yang murni estetika, tidak memengaruhi scoring atau kesulitan case.
+2. **Redeem Center** — menukarkan Koin dengan reward dunia nyata dari mitra pihak ketiga, seperti voucher Grab dan kuota data gratis.
+
+Fitur ini tidak melibatkan transaksi uang asli (top-up/IAP) dari pemain pada fase MVP. Koin hanya diperoleh melalui progres gameplay, tidak dapat dibeli.
+
+### 19.1.2 Tujuan dan Rasional
+
+- Menambah alasan pemain untuk kembali bermain (retensi) di luar dorongan naik level.
+- Memberi *tangible reward* di dunia nyata agar nilai literasi digital terasa lebih "menguntungkan" secara langsung, khususnya bagi persona seperti Nadia yang termotivasi oleh manfaat praktis.
+- Menjaga agar kosmetik tetap terpisah dari sistem kompetensi — supaya pemain tidak salah paham bahwa membeli skin = bermain lebih baik (menghindari kesan pay-to-win, meskipun tidak ada pembayaran uang asli).
+
+### 19.1.3 Ruang Lingkup
+
+#### 19.1.3.1 Dalam Lingkup MVP
+- Sistem saldo Koin Auditor per pengguna beserta riwayat transaksi (wallet).
+- Perolehan Koin dari penyelesaian case (base reward + bonus performa).
+- Katalog Shop berisi item kosmetik, dengan pembelian menggunakan Koin.
+- Inventory pemain: daftar item yang dimiliki, dan mekanisme *equip/unequip*.
+- Katalog Redeem Center berisi reward mitra (voucher Grab, kuota data) dengan harga dalam Koin dan stok terbatas.
+- Klaim redeem: penukaran Koin dengan satu kode unik dari stok yang tersedia, prosedur pencegahan klaim ganda/race condition.
+- Riwayat klaim redeem pemain.
+- Pengelolaan katalog Shop dan Redeem (termasuk unggah batch kode) oleh Admin — *lihat catatan keterkaitan dengan Admin Module di Bagian 9 dokumen ini.*
+
+#### 19.1.3.2 Di Luar Lingkup MVP (Fase Berikutnya)
+- Pembelian Koin dengan uang asli (in-app purchase).
+- Marketplace atau perdagangan item antar-pemain.
+- Integrasi API real-time langsung ke sistem mitra (Grab, operator seluler) untuk generate kode otomatis — pada MVP kode disiapkan manual dalam bentuk batch oleh Admin.
+- Penarikan Koin menjadi uang tunai dalam bentuk apa pun.
+- Item Shop musiman/edisi terbatas dengan mekanisme gacha/random box.
+- Verifikasi identitas lanjutan (KYC) untuk klaim reward bernilai tinggi — lihat Bagian 9 (Risiko & Pertanyaan Terbuka).
+
+#### 19.1.3.3 Batasan (Constraints)
+- Item Shop **tidak boleh** memberi keuntungan gameplay apa pun (tidak menambah XP multiplier, tidak membuka evidence lebih cepat, tidak memengaruhi scoring).
+- Kode redeem bersifat **satu kode untuk satu klaim**; begitu diklaim, kode tidak dapat diklaim ulang oleh siapa pun.
+- Saldo Koin tidak dapat menjadi negatif dalam kondisi apa pun.
+- Seluruh mutasi saldo Koin wajib tercatat sebagai transaksi (tidak ada perubahan saldo "diam-diam").
+
+### 19.1.4 Konsep dan Mekanisme
+
+#### 19.1.4.1 Koin Auditor (Mata Uang Dalam Game)
+
+Koin Auditor adalah mata uang lunak (soft currency), terpisah dari **Auditor Reputation** yang sudah ada. Perbedaannya perlu ditegaskan agar tidak rancu:
+
+| | Auditor Reputation | Koin Auditor |
+|---|---|---|
+| Fungsi | Mengukur kualitas/kepercayaan sebagai auditor (kompetensi) | Mata uang yang bisa dibelanjakan |
+| Sumber | Kualitas keputusan pada case | Penyelesaian case + bonus tertentu |
+| Dapat dibelanjakan? | Tidak | Ya |
+| Rentang nilai | 0–1000 (clamped) | Tidak terbatas atas, tidak boleh negatif |
+
+**Sumber perolehan Koin (MVP):**
+- Reward dasar setiap kali menyelesaikan case (`final submission` berhasil).
+- Bonus performa: skor investigasi tinggi, evidence dibuka lengkap sebelum menjawab, atau tidak ada kekeliruan besar.
+- Bonus penyelesaian case pertama kali (first-time completion, untuk mencegah farming lewat replay case yang sama — *lihat 4.1.1*).
+
+**4.1.1 Anti-Farming**
+Case yang sudah pernah diselesaikan (`completed`) dan dimainkan ulang tidak memberikan Koin, hanya XP percobaan ulang (jika ada), untuk mencegah eksploitasi ekonomi Koin melalui pengulangan case yang sama.
+
+#### 19.1.4.2 Shop (Kosmetik)
+
+Kategori item pada MVP:
+- **Avatar skin** — tampilan alternatif avatar auditor.
+- **City skin / background variant** — variasi visual Kota Nusa pada City Dashboard (murni tampilan, tidak mengubah indikator kota).
+- **Chat bubble theme** — tema visual pada panel chatbot kontekstual.
+- **Title / badge** — label kosmetik yang tampil di profil dan leaderboard.
+
+Setiap item memiliki harga tetap dalam Koin, tidak fluktuatif. Item yang sudah dimiliki tidak dapat dibeli ulang (tombol berubah menjadi "Equip"/"Dimiliki").
+
+#### 19.1.4.3 Redeem Center (Reward Dunia Nyata)
+
+Kategori reward pada MVP:
+- **Voucher Grab** (mis. kode potongan/kredit Grab).
+- **Kuota data gratis** (kode voucher operator seluler).
+- Kategori mitra lain dapat ditambahkan tanpa mengubah struktur data (generik per `redeem_item.type`).
+
+Karakteristik yang membedakan Redeem dari Shop:
+- **Stok terbatas** per item (bukan digital tanpa batas seperti skin).
+- Menghasilkan **kode unik** yang harus dikirim ke pemain (bukan sekadar entri di inventory).
+- Berpotensi disalahgunakan (multi-akun untuk memborong reward bernilai nyata) sehingga membutuhkan pembatasan tambahan (lihat 4.3.1).
+
+**4.3.1 Pembatasan Klaim**
+- Maksimum klaim per item per pemain, mis. 1x per item per periode (harian/mingguan/bulanan — dikonfigurasi per item oleh Admin).
+- Sistem menampilkan sisa stok secara real-time ("Tersisa 12 dari 50") agar ekspektasi pemain terkelola.
+- Redeem Center dapat mensyaratkan level/reputasi minimum agar reward tidak habis oleh akun baru yang dibuat khusus untuk farming (lihat Bagian 9, Risiko).
+
+### 19.1.5 Dampak terhadap Persona (Nadia)
+
+Menambah *Emotional & Functional Jobs* baru pada persona yang sudah ada di PRD utama:
+- **Gains baru:** "Mendapat manfaat nyata (kuota, voucher) dari waktu yang dihabiskan belajar literasi digital."
+- **Pain relievers baru:** Nadia yang punya keterbatasan kuota internet dapat memperoleh kuota gratis sebagai insentif langsung untuk terus bermain, bukan sekadar poin abstrak.
+
+### 19.1.6 Struktur Layar (UI)
+
+#### 19.1.6.1 Navigasi
+Dua tab baru ditambahkan pada navigasi utama (sejajar dengan City Dashboard, Case History, Leaderboard, Profile): **Shop** dan **Redeem**. Saldo Koin ditampilkan persisten di header/navbar di seluruh layar utama (mirip pola Public Trust/statistik kota yang selalu terlihat).
+
+#### 19.1.6.2 Shop Screen
+- Grid item, difilter berdasarkan kategori (avatar/city/chat theme/title).
+- Setiap card menampilkan: thumbnail, nama, harga Koin, status (dimiliki/belum, sedang dipakai).
+- Tap item → modal detail (preview lebih besar) → tombol Beli atau Equip.
+
+#### 19.1.6.3 Purchase Confirmation
+- Ringkasan: item, harga, saldo Koin sebelum & sesudah transaksi.
+- Konfirmasi wajib sebelum saldo terpotong (mencegah pembelian tidak sengaja).
+
+#### 19.1.6.4 Inventory Screen
+- Daftar seluruh item yang dimiliki pemain, dikelompokkan per kategori.
+- Indikator item yang sedang aktif/di-equip.
+
+#### 19.1.6.5 Redeem Screen
+- Daftar reward mitra dengan: nama, logo mitra, harga Koin, sisa stok, batas klaim per periode.
+- Item dengan stok habis ditandai "Habis" dan tombol klaim dinonaktifkan.
+
+#### 19.1.6.6 Redeem Claim Confirmation & Kode
+- Konfirmasi sebelum saldo terpotong (sama seperti Shop).
+- Setelah klaim berhasil: layar menampilkan kode unik hasil penukaran beserta instruksi penggunaan (mis. cara redeem ke akun Grab).
+- Kode juga tersimpan permanen di **Redeem History** agar pemain dapat melihatnya kembali kapan saja (mencegah keluhan "kode hilang").
+
+#### 19.1.6.7 Redeem History
+- Daftar seluruh klaim yang pernah dilakukan pemain: item, tanggal, kode (dapat disalin ulang), status pengiriman (jika ada proses lanjutan di luar sistem).
+
+### 19.1.7 Functional Requirements per Modul
+
+#### 19.1.7.1 Wallet Module
+Mengelola saldo dan riwayat transaksi Koin Auditor.
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| WALLET-01 | Saldo Koin per pengguna | Sistem menyimpan saldo Koin yang terikat ke akun pengguna. | Must | Saldo tidak pernah negatif; selalu bilangan bulat non-negatif. |
+| WALLET-02 | Perolehan Koin dari penyelesaian case | Koin ditambahkan otomatis sebagai bagian dari transaksi `final submission` yang sama dengan pemberian XP. | Must | Penambahan Koin dan XP terjadi dalam satu transaksi atomik; tidak ada kondisi XP bertambah tanpa Koin atau sebaliknya. |
+| WALLET-03 | Anti-farming replay case | Case yang sudah berstatus `completed` sebelumnya tidak memberikan Koin pada penyelesaian berikutnya. | Must | Replay case tidak mengubah saldo Koin. |
+| WALLET-04 | Riwayat transaksi Koin | Pemain dapat melihat daftar transaksi (masuk/keluar) beserta sumber/tujuannya. | Should | Riwayat menampilkan minimal: tanggal, jenis (earn/spend), jumlah, deskripsi sumber (nama case/item/reward). |
+| WALLET-05 | Saldo tampil persisten | Saldo Koin terkini ditampilkan di navigasi utama pada seluruh layar dalam sesi aktif. | Should | Saldo diperbarui otomatis tanpa perlu refresh manual setelah transaksi. |
+
+#### 19.1.7.2 Shop Module
+Mengelola katalog item kosmetik dan proses pembelian.
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| SHOP-01 | Katalog item Shop | Menampilkan seluruh item aktif beserta kategori, harga, dan status kepemilikan pemain. | Must | Item nonaktif (di-*retire* Admin) tidak muncul di katalog namun tetap ada di inventory pemilik lama. |
+| SHOP-02 | Pembelian item | Pemain dapat membeli item selama saldo Koin mencukupi dan item belum dimiliki. | Must | Saldo tidak mencukupi → error jelas, tidak memotong saldo sebagian; item sudah dimiliki → tombol beli tidak aktif. |
+| SHOP-03 | Item bersifat kosmetik murni | Item Shop tidak boleh memengaruhi scoring, unlock case, atau mekanisme gameplay apa pun. | Must | Verifikasi desain: tidak ada field pada item yang terhubung ke scoring rule/unlock requirement. |
+| SHOP-04 | Equip/unequip item | Pemain dapat mengaktifkan satu item per kategori sebagai tampilan aktif. | Must | Hanya satu item aktif per kategori (mis. satu avatar skin aktif dalam satu waktu). |
+| SHOP-05 | Idempotensi pembelian | Permintaan pembelian yang dikirim berulang (mis. akibat retry jaringan) tidak boleh memotong saldo lebih dari satu kali untuk transaksi yang sama. | Must | Menggunakan idempotency key sesuai pola yang sudah diterapkan pada Answer/Submission module. |
+
+#### 19.1.7.3 Redeem Module
+Mengelola katalog reward mitra, stok kode, dan proses klaim.
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| REDEEM-01 | Katalog Redeem | Menampilkan reward aktif beserta harga Koin, sisa stok, dan mitra penyedia. | Must | Item dengan stok 0 tetap tampil namun berstatus "Habis" dan tidak dapat diklaim. |
+| REDEEM-02 | Klaim reward | Pemain menukar Koin dengan satu kode unik dari stok yang tersedia. | Must | Saldo terpotong dan satu kode ditandai `claimed` dalam satu transaksi atomik; tidak ada kondisi Koin terpotong tanpa kode diberikan atau sebaliknya. |
+| REDEEM-03 | Pencegahan klaim ganda atas kode yang sama | Satu kode hanya dapat diberikan kepada satu pemain, walau terjadi permintaan klaim bersamaan (concurrent). | Must | Pengujian concurrent request menghasilkan tepat satu pemain yang menerima kode; permintaan lain menerima error "stok habis" jika kode terakhir sudah terambil. |
+| REDEEM-04 | Batas klaim per pemain per item | Sistem membatasi jumlah klaim seorang pemain terhadap item redeem yang sama dalam periode tertentu (dikonfigurasi per item). | Must | Percobaan klaim melebihi batas periode ditolak dengan pesan yang menjelaskan kapan dapat mencoba lagi. |
+| REDEEM-05 | Riwayat klaim pemain | Pemain dapat melihat kembali seluruh kode yang pernah diklaim beserta tanggal dan instruksi penggunaan. | Must | Kode yang sudah diklaim tetap dapat dilihat/disalin ulang kapan pun dari riwayat. |
+| REDEEM-06 | Pengelolaan stok kode oleh Admin | Admin dapat menambah batch kode baru untuk suatu item redeem. | Should | Penambahan batch tidak mengganggu proses klaim yang sedang berjalan; kode baru langsung menambah sisa stok yang tampil ke pemain. |
+| REDEEM-07 | Kerahasiaan kode sebelum klaim | Kode yang belum diklaim tidak boleh terlihat oleh siapa pun melalui endpoint publik atau log aplikasi. | Must | Audit menunjukkan kode hanya muncul di response API tepat saat berhasil diklaim oleh pemiliknya, dan tidak tercatat dalam log biasa (hanya pada penyimpanan data terenkripsi/terbatas akses). |
+
+### 19.1.8 Data yang Dibutuhkan (Ringkasan)
+
+Mengikuti prinsip *data minimization* pada dokumen induk, data tambahan yang dikumpulkan dibatasi pada:
+- Saldo dan riwayat transaksi Koin.
+- Item yang dimiliki/di-equip pemain.
+- Riwayat klaim redeem (item, kode, waktu).
+
+**Catatan khusus:** untuk kategori reward yang memerlukan pengiriman ke nomor telepon (misalnya kuota data), sistem membutuhkan nomor telepon aktif pemain — data ini **belum ada** dalam skema data minimum pengguna saat ini (lihat Bagian 9, Pertanyaan Terbuka).
+
+### 19.1.9 Risiko dan Pertanyaan Terbuka
+
+| Topik | Risiko/Pertanyaan | Catatan |
+|---|---|---|
+| Multi-akun farming | Pemain dapat membuat banyak akun untuk memborong reward bernilai nyata (voucher/kuota) yang stoknya terbatas. | Perlu diputuskan: apakah cukup dibatasi dengan limit level/reputasi minimum, atau perlu verifikasi tambahan (nomor telepon/OTP) khusus untuk fitur redeem. |
+| Data nomor telepon | Kuota data mensyaratkan nomor telepon tujuan, sementara skema data saat ini tidak mengumpulkan nomor telepon. | Perlu keputusan produk: kumpulkan saat onboarding (mengubah prinsip data minimum) atau hanya diminta saat pemain pertama kali klaim kategori "kuota". |
+| Ketersediaan kode habis mendadak | Reward populer bisa habis dalam waktu singkat, menimbulkan kekecewaan. | Pertimbangkan notifikasi "stok menipis" atau kuota klaim harian per item agar distribusi lebih merata. |
+| Kesalahan pengiriman kode oleh mitra | Kode dari mitra (Grab/operator) tidak valid atau sudah dipakai di sisi mitra. | Di luar kendali sistem KODEKABI pada MVP karena kode diunggah manual; perlu SOP verifikasi kode sebelum diunggah Admin. |
+| Ekonomi Koin tidak seimbang | Jika sumber Koin terlalu deras dibanding harga item, nilai reward jadi terlalu mudah didapat (atau sebaliknya, terlalu sulit sehingga fitur terasa hampa). | Perlu tuning harga/reward pasca-MVP berdasarkan data telemetri riil, bukan diputuskan sekali di awal. |
+
+
+### 19.2 Admin Console
+
+### 19.2.1 Ringkasan Fitur
+
+Admin Console adalah antarmuka internal terpisah dari aplikasi player, digunakan oleh satu role tunggal: **`admin`**. Role ini menggantikan pemisahan `content_author`/`admin` yang sebelumnya tersirat di SRS induk — seluruh kebutuhan produksi konten (case, shop, redeem) dan operasional (user management, moderasi, konfigurasi, audit) dikelola oleh role yang sama, dengan lapisan keamanan tambahan berupa **autentikasi dua faktor (2FA)** karena cakupan aksesnya sangat luas.
+
+### 19.2.2 Tujuan dan Rasional
+
+- Memberi tempat kerja resmi bagi aktivitas yang selama ini hanya tersirat sebagai *role* di RBAC (publish case, kelola shop/redeem, moderasi) tapi tidak pernah punya spesifikasi antarmuka.
+- Menyederhanakan operasional di tahap awal produk (tim kecil) dengan menghilangkan hand-off dua pihak (content author → admin) yang tidak diperlukan pada skala tim saat ini.
+- Menjaga integritas data yang berdampak langsung ke pemain (scoring, ekonomi Koin, kode redeem bernilai nyata) melalui validasi otomatis dan audit trail yang ketat, mengingat kesalahan di sisi admin bisa memengaruhi banyak pemain sekaligus.
+
+### 19.2.3 Ruang Lingkup
+
+#### 19.2.3.1 Dalam Lingkup
+- Login admin dengan 2FA (password + OTP email).
+- User Management: direktori pengguna, detail profil, role toggle, moderasi akun (suspend/ban/force logout), hapus akun.
+- CMS Case: form builder case sesuai schema generik, AI-assisted draft generation dengan validasi otomatis, preview sandbox, publish langsung, version control & rollback, konfigurasi unlock requirement.
+- CMS Shop & Redeem: CRUD item Shop, CRUD item Redeem, upload batch kode dengan validasi duplikasi, void kode, dashboard ekonomi Koin.
+- Moderasi: antrean tinjauan percakapan chatbot yang di-flag dan open response yang ditandai AI "perlu human review".
+- Dashboard operasional: kesehatan sistem (AI latency, fallback rate, error rate), metrik gameplay agregat.
+- Konfigurasi game: tabel pemetaan visual kota, tuning formula reward.
+- Tata kelola AI/chatbot: guardrail, prompt rubric, monitoring biaya & fallback.
+- Leaderboard admin: reset musiman, investigasi anomali.
+- Audit log terpusat, append-only.
+- Pengumuman in-app.
+- Reporting & export data agregat.
+
+#### 19.2.3.2 Di Luar Lingkup (Fase Berikutnya)
+- Role tambahan selain `player`/`admin` (mis. `moderator` terpisah) — dicatat sebagai catatan arsitektur untuk direvisit bila tim admin membesar.
+- Integrasi API real-time ke mitra Redeem (Grab, operator seluler) untuk generate kode otomatis — kode tetap diunggah manual oleh Admin pada fase ini.
+- Mekanisme anonimisasi akun saat penghapusan — penghapusan bersifat hapus penuh (hard delete) sebagai default sederhana.
+- Dashboard guru/fasilitator (pengguna sekunder) sebagai produk terpisah — Admin Console hanya menyiapkan aksesnya di fase ini, belum membangun dashboard-nya sendiri.
+- Fallback channel OTP selain email (mis. SMS/authenticator app).
+
+#### 19.2.3.3 Batasan (Constraints)
+- Login admin **tidak boleh** berhasil tanpa OTP, termasuk di lingkungan development/staging.
+- Item Shop tetap kosmetik murni (tidak boleh memengaruhi scoring/unlock), sesuai batasan yang sudah ditetapkan di addendum Shop & Redeem.
+- Seluruh mutasi data yang menyentuh pemain (role, saldo, kode redeem, konten case published) **wajib** tercatat di audit log tanpa kecuali.
+- Draft case hasil AI generation **wajib** lolos validasi konsistensi ID otomatis sebelum dapat disimpan sebagai `draft` yang bisa ditinjau — tidak boleh ada draft dengan referensi ID rusak yang lolos ke tahap review manual.
+
+### 19.2.4 Model Role dan Akses
+
+| Role | Cakupan Akses |
+|---|---|
+| `player` | Akses aplikasi gameplay (tidak berubah dari dokumen induk). |
+| `admin` | Akses penuh ke seluruh Admin Console. |
+
+Perubahan ini merevisi AUTH-05 pada PRD induk ("Sistem membedakan peran player, content author, dan admin") menjadi: **Sistem membedakan peran player dan admin**, dengan `admin` membawa akses penuh ke seluruh fungsi produksi dan operasional yang sebelumnya terbagi antara `content_author` dan `admin`.
+
+### 19.2.5 Konsep dan Mekanisme
+
+#### 19.2.5.1 Autentikasi Admin (2FA)
+Login admin membutuhkan dua langkah: password, lalu kode OTP 6 digit yang dikirim ke email terdaftar, berlaku 5 menit dan sekali pakai. Percobaan OTP salah dibatasi mengikuti pola rate-limit yang sudah diterapkan pada modul Auth pemain (SRS-AUTH-003).
+
+#### 19.2.5.2 User Management
+Admin dapat melihat direktori pengguna, membuka detail profil lengkap (termasuk data dari Wallet dan Redeem — akses ini sendiri tercatat di audit log karena menyentuh data sensitif), mengubah role (`player` ↔ `admin` dengan konfirmasi tambahan), memoderasi akun (suspend/ban/force logout), dan menghapus akun secara permanen.
+
+#### 19.2.5.3 CMS Case
+
+*(Revisi — alur dua fase: create case dengan metadata saja, lalu lengkapi detail di halaman terpisah dengan tab per bagian.)*
+
+**Fase 1 — Create Case (metadata saja).** Admin mengisi metadata case (judul, tema, risk level, estimasi durasi, unlock requirement, dan thumbnail) secara manual atau dengan bantuan AI. Pada mode AI, Admin cukup memberi parameter (tema, fokus kompetensi, tingkat kesulitan) dan AI mengembalikan seluruh field metadata **plus prompt gambar untuk thumbnail** dalam satu response — bukan gambar itu sendiri (lihat 19.2.5.3.2). Admin meninjau/menyunting, lalu menekan **Create**. Sistem menyimpan `case_versions` baru berstatus `draft` dengan `evidence[]`, `questions[]`, `chatbot_config`, dan `scoring_rule`/`outcome_rules` masih kosong, lalu mengarahkan Admin ke halaman **Case Detail**.
+
+**Fase 2 — Case Detail (hub dengan tab).** Halaman ini menampilkan ringkasan metadata (dapat disunting inline atau lewat tombol edit) dan empat tab independen di bawahnya: **Evidence**, **Questions**, **Chatbot Config**, dan **Scoring & Outcome**. Setiap tab dapat diisi manual atau lewat generate AI, dengan cakupan sebagai berikut:
+
+- **Evidence** — generate AI menghasilkan satu set utuh 3–5 evidence sekaligus (bukan satu per satu), masing-masing memilih salah satu dari 6 `template_type` (`social_post`, `article`, `blog`, `forum_thread`, `chat_transcript`, `public_announcement`, boleh berulang tipe). Case **tidak wajib** memuat keenam tipe sekaligus. Prompt gambar untuk evidence yang membutuhkan foto (opsional) ikut disertakan langsung di evidence terkait, bukan di tempat terpisah.
+- **Questions** — generate AI **membutuhkan minimal satu evidence sudah ada** (dikirim sebagai context ke AI supaya `related_evidence_ids` merujuk ID yang valid); manual add pun tetap butuh evidence untuk direferensikan.
+- **Chatbot Config** — independen, dapat diisi kapan saja setelah case dibuat.
+- **Scoring & Outcome** — **terkunci** (baik untuk generate AI maupun input manual) sampai tab Evidence dan Questions punya isi, karena `scoring_rule` wajib merujuk `evidence_id`/`question_id` yang benar-benar ada. Saat generate AI di tab ini, backend mengirim daftar evidence dan questions yang sudah ada sebagai context.
+
+Setiap kali generate AI dipanggil di tab manapun, backend mengirim **system prompt tetap khusus tahap itu** (lihat Lampiran A pada SRS untuk isi lengkap tiap prompt) plus **state case saat ini** yang relevan sebagai context — bukan satu prompt tunggal untuk seluruh case seperti rancangan sebelumnya. Backend memvalidasi konsistensi ID setiap kali evidence/questions/scoring diperbarui (baik manual maupun AI), bukan cuma sekali di awal.
+
+**Publish** hanya dapat dilakukan setelah validasi lengkap: metadata beserta thumbnail terisi, evidence 3–5 dengan minimal satu `is_critical: true`, questions lengkap dengan `related_evidence_ids` valid, chatbot config terisi, dan scoring rule mencakup kelima kategori dengan outcome rules yang menutup seluruh rentang skor tanpa celah. Kalau ada bagian yang belum lengkap, publish ditolak dan Admin diarahkan kembali ke tab yang bersangkutan.
+
+##### 19.2.5.3.1 Skema Evidence (Revisi) dan Produksi Aset Visual
+
+**Field umum di setiap evidence**, apa pun tipenya: `evidence_id`, `template_type`, `label` (tampil di list evidence kolom kiri), `credibility_tags` (dipakai scoring, tidak tampil ke pemain), `is_critical` (evidence wajib dibuka untuk skor evidence evaluation maksimal).
+
+**Field khusus per `template_type`** (avatar/foto profil sudah dihapus dari skema — cukup nama teks, tanpa gambar):
+
+| template_type | Field Khusus |
+|---|---|
+| `social_post` | `author_name`, `author_handle`, `platform` (nama fiktif), `post_text`, `image_slot` (opsional), `timestamp`, `engagement_count`, `is_verified_account` |
+| `article` | `headline`, `source_name` (fiktif), `author_name`, `publish_date`, `body_text`, `header_image_slot` (opsional) |
+| `blog` | `title`, `author_name`, `blog_name`, `publish_date`, `body_text` |
+| `forum_thread` | `thread_title`, `forum_name`, `posts[]` (`author_name`, `text`, `timestamp`, `upvote_count` — tanpa avatar) |
+| `chat_transcript` | `participants[]` (nama saja, tanpa avatar), `messages[]` (`sender`, `text`, `timestamp`) |
+| `public_announcement` | `issuing_body` (fiktif), `title`, `body_text`, `date` |
+
+##### 19.2.5.3.2 Aset Visual per Slot
+
+| Slot | Wajib/Opsional | Dihasilkan Pada Tahap | Sifat |
+|---|---|---|---|
+| **Thumbnail case** | **Wajib** — blocking untuk publish | Fase 1 (Create Case, bagian metadata) | Unik per case, bukan reusable per kategori |
+| **Evidence image** (`image_slot`, `header_image_slot`) | Opsional | Fase 2, saat generate/isi tab Evidence | Kalau kosong, tampil sebagai placeholder box, tidak blocking publish |
+
+Untuk kedua jenis slot, AI generator menyertakan sebuah **prompt gambar siap pakai** (bukan gambar itu sendiri) langsung menyatu dengan objek yang digambarkannya — prompt thumbnail keluar bareng respons generate metadata, prompt evidence image keluar bareng evidence yang bersangkutan saat generate tab Evidence — dibangun dari satu *style anchor* tetap (gaya visual, palet warna, mood — sama di semua case demi konsistensi identitas Kota Nusa) digabung deskripsi spesifik. Admin memakai prompt ini di tools image-generation eksternal pilihan sendiri, lalu mengunggah hasilnya secara manual ke slot yang sesuai. Prompt yang dipakai tetap disimpan bersama file yang diunggah, supaya dapat dipakai ulang atau disunting kalau Admin ingin regenerate.
+
+#### 19.2.5.4 CMS Shop & Redeem
+Admin mengelola katalog item Shop (kosmetik) dan item Redeem (reward mitra dunia nyata), termasuk mengunggah batch kode redeem dengan validasi duplikasi, serta memantau ekonomi Koin (sumber vs. penggunaan) untuk mendeteksi ketidakseimbangan sejak dini.
+
+#### 19.2.5.5 Moderasi Konten
+Percakapan chatbot yang di-flag guardrail dan jawaban open question yang ditandai AI sebagai "perlu human review" (semantic signal yang sudah dihasilkan sistem sejak PRD induk Bagian 3.5.5, namun belum punya tempat ditindaklanjuti) masuk ke antrean moderasi dengan konteks lengkap.
+
+#### 19.2.5.6 Dashboard Operasional
+Menampilkan kesehatan sistem (latency AI API, fallback rate chatbot, error rate submission) dan metrik gameplay agregat (funnel drop-off, distribusi skor kompetensi, case dengan completion rate rendah).
+
+#### 19.2.5.7 Konfigurasi Game
+Tabel pemetaan visual kota (yang menurut SRS-CITY-003 harus dapat dikonfigurasi, bukan hardcode) dan formula reward XP/Koin dikelola lewat antarmuka, dengan staging sebelum berlaku ke production.
+
+#### 19.2.5.8 Tata Kelola AI/Chatbot
+Guardrail, prompt rubric semantic evaluation, dan monitoring biaya/fallback AI dikelola terpusat, terpisah dari editor case biasa karena menyangkut keamanan konten lintas case.
+
+#### 19.2.5.9 Leaderboard Admin
+Reset musiman dan investigasi skor anomali (indikasi eksploitasi), dengan penyesuaian manual yang mewajibkan alasan tertulis dan tercatat di audit log.
+
+#### 19.2.5.10 Audit Log
+Satu tempat terpusat, append-only, mencatat seluruh aksi sensitif admin (publish/reject case, ubah role, suspend/ban/hapus akun, ubah harga/stok, lihat kode redeem milik pengguna, ubah konfigurasi scoring), dapat difilter berdasarkan aktor/jenis aksi/tanggal.
+
+#### 19.2.5.11 Pengumuman In-App
+Admin dapat mengirim pengumuman (case baru rilis, maintenance terjadwal, event Redeem terbatas) ke seluruh atau segmen pemain tertentu.
+
+#### 19.2.5.12 Reporting & Export
+Ekspor data agregat/anonim untuk keperluan riset atau laporan institusi, tidak memuat identitas individual di luar yang sudah publik (mis. username leaderboard).
+
+### 19.2.6 Struktur Layar (UI)
+
+#### 19.2.6.1 Login Screen
+- Form password → form OTP terpisah (dua langkah, bukan satu form gabungan) agar jelas tahapannya bagi admin.
+- Indikator waktu tersisa sebelum OTP kedaluwarsa.
+
+#### 19.2.6.2 Navigasi Utama
+```
+Dashboard | Users | Case CMS | Shop & Redeem CMS | Moderation | Game Config | Leaderboard | Audit Log | Reports
+```
+
+#### 19.2.6.3 Dashboard
+Ringkasan operasional (kesehatan sistem) dan ekonomi (tren Koin) dalam satu layar overview.
+
+#### 19.2.6.4 Users
+- Direktori dengan pencarian & filter.
+- Detail profil bertab (Overview, Riwayat Case, Inventory & Redeem, Wallet, Consent & Privasi, Aksi Admin).
+
+#### 19.2.6.5 Case CMS
+- **Katalog Case** (semua status: draft/published/archived).
+- **Create Case** — form metadata saja (manual atau AI-assisted, termasuk prompt thumbnail), diakhiri tombol Create yang membuat case draft kosong.
+- **Case Detail** — ringkasan metadata (editable inline/lewat tombol edit) di atas, empat tab di bawahnya: Evidence, Questions, Chatbot Config, Scoring & Outcome. Tab Scoring & Outcome tampil terkunci (dengan indikator alasan) sampai Evidence dan Questions terisi. Tiap tab punya opsi manual add atau generate AI, dengan slot upload aset visual menyatu langsung di form evidence yang membutuhkannya — bukan panel terpisah.
+- **Preview Sandbox** (mode mainkan sebagai player), tersedia begitu seluruh tab terisi.
+- **Riwayat Versi** per case.
+
+#### 19.2.6.6 Shop & Redeem CMS
+- Item Shop (grid/table CRUD).
+- Item Redeem (grid/table CRUD).
+- Batch Kode (upload, riwayat batch, void kode).
+- Economy Dashboard (grafik sumber vs. penggunaan Koin).
+
+#### 19.2.6.7 Moderation
+- Antrean chatbot flagged dan open response flagged, dengan tampilan konteks penuh (case, pemain, isi percakapan/jawaban).
+
+#### 19.2.6.8 Game Config
+- Editor tabel pemetaan visual kota.
+- Editor formula reward XP/Koin dengan mode staging/preview.
+
+#### 19.2.6.9 Leaderboard
+- Kontrol reset musiman, daftar skor anomali yang terdeteksi, form penyesuaian manual (wajib alasan).
+
+#### 19.2.6.10 Audit Log
+- Tabel log dengan filter aktor/jenis aksi/rentang tanggal, tidak dapat diedit/dihapus dari UI manapun.
+
+#### 19.2.6.11 Reports
+- Form pemilihan jenis laporan dan rentang data, tombol export (CSV/JSON agregat).
+
+### 19.2.7 Functional Requirements per Modul
+
+#### 19.2.7.1 Auth Admin Module
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| ADMIN-AUTH-01 | Login dua langkah | Login admin membutuhkan password lalu OTP email. | Must | Login tidak berhasil hanya dengan password; berlaku di semua environment termasuk staging. |
+| ADMIN-AUTH-02 | OTP sekali pakai & kedaluwarsa | Kode OTP berlaku 5 menit, sekali pakai. | Must | OTP yang sudah dipakai/kedaluwarsa ditolak. |
+| ADMIN-AUTH-03 | Rate limit percobaan OTP | Percobaan OTP salah berulang memicu blokir sementara. | Must | Maksimum 5 percobaan salah sebelum diblokir 15 menit, konsisten dengan pola SRS-AUTH-003. |
+| ADMIN-AUTH-04 | Masa berlaku token admin lebih pendek | Token sesi admin memiliki TTL lebih pendek dibanding sesi player. | Should | Token admin kedaluwarsa memaksa re-autentikasi penuh (password + OTP), bukan sekadar refresh. |
+
+#### 19.2.7.2 User Management Module
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| ADMIN-USER-01 | Direktori & pencarian pengguna | Pencarian dan filter pengguna oleh Admin. | Must | Hasil pencarian <2 detik untuk basis data skala menengah. |
+| ADMIN-USER-02 | Detail profil lengkap | Menampilkan overview, riwayat case, inventory, wallet, consent per pengguna. | Must | Data konsisten dengan yang dilihat pengguna di aplikasinya sendiri. |
+| ADMIN-USER-03 | Toggle role player ↔ admin | Admin dapat menaikkan/menurunkan role pengguna. | Must | Perubahan tercatat di audit log; menaikkan ke admin memerlukan konfirmasi tambahan. |
+| ADMIN-USER-04 | Suspend/ban akun | Admin dapat menangguhkan atau memblokir akun. | Must | Akun tersuspend/ban tidak dapat login; token aktif invalid. |
+| ADMIN-USER-05 | Force logout | Admin dapat memaksa logout seluruh sesi aktif pengguna. | Should | Seluruh token masuk denylist dalam <5 detik. |
+| ADMIN-USER-06 | Hapus akun permanen | Admin dapat menghapus akun secara penuh. | Should | Data akun terhapus; data agregat historis tidak dihitung ulang. |
+
+#### 19.2.7.3 Case CMS Module
+
+*(Revisi — requirement disusun ulang mengikuti alur dua fase: create metadata, lalu lengkapi detail per tab.)*
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| ADMIN-CASE-01 | Create case dengan metadata saja | Admin membuat case baru dengan mengisi metadata (manual/AI), tanpa perlu mengisi evidence/questions/scoring di langkah yang sama. | Must | Klik Create menghasilkan `case_versions` baru berstatus `draft` dengan `evidence[]`, `questions[]`, `chatbot_config`, `scoring_rule` kosong. |
+| ADMIN-CASE-02 | AI-assisted metadata generation | Admin mengisi parameter (tema, fokus kompetensi, kesulitan), sistem generate seluruh field metadata plus prompt thumbnail. | Should | Response generate menyertakan prompt thumbnail; Admin dapat menyunting sebelum menekan Create. |
+| ADMIN-CASE-03 | Halaman Case Detail dengan tab per bagian | Setelah create, Admin diarahkan ke halaman detail berisi ringkasan metadata dan tab Evidence/Questions/Chatbot Config/Scoring & Outcome. | Must | Seluruh tab dapat diakses dari satu halaman tanpa berpindah alamat/case ID. |
+| ADMIN-CASE-04 | Generate AI tab Evidence (satu set) | Generate AI di tab Evidence menghasilkan 3–5 evidence sekaligus dalam satu response, bukan satu per satu. | Should | Response berisi array evidence lengkap dengan field sesuai `template_type` masing-masing, minimal satu `is_critical: true`. |
+| ADMIN-CASE-05 | Generate/isi tab Questions membutuhkan evidence | Generate AI maupun manual add di tab Questions mensyaratkan minimal satu evidence sudah ada. | Must | Percobaan mengisi Questions saat evidence masih kosong ditolak dengan pesan yang mengarahkan ke tab Evidence. |
+| ADMIN-CASE-06 | Tab Scoring & Outcome terkunci | Tab Scoring & Outcome (manual maupun AI) tidak dapat diakses sampai Evidence dan Questions memiliki isi. | Must | UI menampilkan status terkunci dengan alasan; percobaan akses lewat API langsung juga ditolak backend. |
+| ADMIN-CASE-07 | Context-aware generation per tab | Generate AI di tab Questions dan Scoring & Outcome mengirim state case saat ini (evidence/questions yang sudah ada) sebagai context ke AI. | Must | Question/scoring hasil generate hanya merujuk ID yang benar-benar ada di case tersebut. |
+| ADMIN-CASE-08 | Validasi konsistensi ID berkelanjutan | Sistem memvalidasi konsistensi referensi ID setiap kali evidence/questions/scoring diperbarui (manual maupun AI), bukan hanya sekali di awal. | Must | Perubahan yang merusak referensi (mis. menghapus evidence yang sudah dirujuk question) ditolak atau memicu peringatan eksplisit. |
+| ADMIN-CASE-09 | Validasi publish menyeluruh | Publish memvalidasi kelengkapan seluruh bagian: metadata+thumbnail, evidence 3–5 dengan ≥1 kritis, questions valid, chatbot config terisi, scoring & outcome lengkap tanpa celah skor. | Must | Publish ditolak dengan daftar bagian yang belum lengkap; Admin diarahkan ke tab yang bersangkutan. |
+| ADMIN-CASE-10 | Preview sandbox | Admin dapat memainkan case draft end-to-end tanpa memengaruhi data pemain nyata, tersedia setelah seluruh tab terisi. | Must | Sesi sandbox tidak menghasilkan entri pada tabel gameplay milik pemain nyata mana pun. |
+| ADMIN-CASE-11 | Publish langsung tanpa approval terpisah | Admin mem-publish case tanpa tahap approval pihak lain. | Must | Status berubah `draft` → `published` dalam satu aksi setelah validasi ADMIN-CASE-09 lolos. |
+| ADMIN-CASE-12 | Rollback versi published | Admin dapat menonaktifkan versi bermasalah. | Must | Sesi pemain aktif pada versi lama tidak terganggu (snapshot tetap berlaku). |
+| ADMIN-CASE-13 | Konfigurasi unlock requirement & risk level | Admin mengatur syarat buka case dan tingkat risiko sebagai bagian metadata. | Must | Perubahan langsung tercermin di Case Card pemain setelah publish. |
+| ADMIN-CASE-14 | Aktif/nonaktifkan case dari katalog | Admin dapat menyembunyikan case tanpa menghapus datanya. | Should | Case nonaktif tidak tampil di katalog publik; riwayat pemain yang sudah menyelesaikan tetap utuh. |
+| ADMIN-CASE-15 | Prompt visual menyatu dengan objeknya | Prompt thumbnail keluar bersama generate metadata; prompt evidence image keluar bersama evidence yang bersangkutan saat generate tab Evidence — bukan array terpisah. | Must | Setiap respons generate yang menghasilkan objek berfoto menyertakan field prompt tepat di objek itu. |
+| ADMIN-CASE-16 | Upload manual aset visual ke slot | Admin dapat mengunggah gambar hasil dari tools eksternal ke slot thumbnail/evidence image, dengan prompt yang dipakai tetap tersimpan untuk referensi ulang. | Must | File yang diunggah tersimpan ke Object Storage dan tertaut ke slot yang benar; prompt terkait dapat dilihat kembali kapan pun. |
+
+#### 19.2.7.4 Shop & Redeem CMS Module
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| ADMIN-SHOP-01 | CRUD item Shop | Admin mengelola katalog item kosmetik. | Must | Item baru tampil di katalog player setelah status `active`. |
+| ADMIN-REDEEM-01 | CRUD item Redeem | Admin mengelola katalog reward mitra. | Must | Perubahan harga/limit langsung berlaku untuk klaim berikutnya. |
+| ADMIN-REDEEM-02 | Upload batch kode dengan validasi duplikasi | Admin mengunggah kode baru per item redeem. | Must | Batch dengan duplikasi ditolak seluruhnya, disertai daftar kode bentrok. |
+| ADMIN-REDEEM-03 | Void kode belum terklaim | Admin dapat membatalkan kode yang belum diklaim. | Should | Kode `voided` tidak dapat diklaim; kode `claimed` tidak terpengaruh. |
+| ADMIN-ECON-01 | Dashboard ekonomi Koin | Menampilkan tren sumber vs. penggunaan Koin. | Could | Data dapat difilter per periode (mingguan/bulanan). |
+
+#### 19.2.7.5 Moderation Module
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| ADMIN-MOD-01 | Antrean moderasi chatbot & open response | Item yang di-flag sistem otomatis masuk antrean tinjauan. | Must | Setiap item menampilkan konteks lengkap (case, pemain, isi). |
+| ADMIN-MOD-02 | Tindak lanjut hasil moderasi | Admin dapat menandai item sebagai selesai ditinjau, dengan catatan tindakan. | Should | Status item berubah `pending` → `reviewed`, tercatat di audit log. |
+
+#### 19.2.7.6 Operational Dashboard Module
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| ADMIN-OPS-01 | Dashboard kesehatan sistem | Menampilkan latency AI, fallback rate, error rate submission. | Should | Data near real-time (lag maksimum beberapa menit dapat diterima). |
+| ADMIN-OPS-02 | Metrik gameplay agregat | Menampilkan funnel drop-off dan distribusi skor kompetensi. | Could | Dapat difilter per rentang tanggal. |
+
+#### 19.2.7.7 Game Config Module
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| ADMIN-CONFIG-01 | Editor tabel pemetaan visual kota | Admin mengubah mapping status indikator kota ke aset visual. | Should | Perubahan langsung berlaku tanpa deployment ulang. |
+| ADMIN-CONFIG-02 | Editor formula reward dengan staging | Admin menguji perubahan formula XP/Koin sebelum berlaku ke production. | Could | Perubahan hanya berlaku ke production setelah konfirmasi eksplisit terpisah dari mode staging. |
+
+#### 19.2.7.8 AI Governance Module
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| ADMIN-AI-01 | Kelola guardrail & prompt rubric | Admin mengatur batasan perilaku chatbot dan rubric evaluasi semantik. | Should | Perubahan tervalidasi sebelum berlaku ke case published. |
+| ADMIN-AI-02 | Monitoring biaya & fallback AI | Menampilkan penggunaan token/biaya API dan tingkat fallback. | Could | Data dapat difilter per periode. |
+
+#### 19.2.7.9 Leaderboard Admin Module
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| ADMIN-LB-01 | Reset leaderboard musiman | Admin mereset peringkat pada awal periode baru. | Could | Reset tercatat di audit log dengan timestamp. |
+| ADMIN-LB-02 | Investigasi & penyesuaian skor anomali | Admin dapat menyesuaikan skor pemain secara manual dengan alasan wajib. | Could | Penyesuaian tercatat lengkap (nilai lama, baru, alasan, aktor) di audit log. |
+
+#### 19.2.7.10 Audit Log Module
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| ADMIN-AUDIT-01 | Pencatatan otomatis seluruh aksi sensitif | Setiap mutasi data oleh Admin tercatat tanpa perlu aksi tambahan dari Admin. | Must | Tidak ada jalur mutasi data admin yang melewati pencatatan audit log. |
+| ADMIN-AUDIT-02 | Log bersifat append-only | Log tidak dapat diedit/dihapus oleh admin manapun lewat antarmuka apa pun. | Must | Tidak ada endpoint update/delete pada tabel audit log. |
+| ADMIN-AUDIT-03 | Filter & pencarian log | Admin dapat memfilter log berdasarkan aktor, jenis aksi, rentang tanggal. | Should | Hasil filter akurat dan responsif untuk volume log skala menengah. |
+
+#### 19.2.7.11 Announcement Module
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| ADMIN-NOTIF-01 | Kirim pengumuman in-app | Admin membuat pengumuman yang tampil ke pemain. | Could | Pengumuman tampil sesuai target segmen dan jadwal yang ditentukan. |
+
+#### 19.2.7.12 Reporting Module
+
+| ID | Requirement | Deskripsi | Prioritas | Acceptance Criteria |
+|---|---|---|---|---|
+| ADMIN-REPORT-01 | Ekspor data agregat | Admin dapat mengekspor data agregat/anonim. | Could | Data ekspor tidak memuat identitas individual di luar yang sudah publik. |
+
+### 19.2.8 Dampak terhadap Dokumen yang Sudah Ada
+
+| Dokumen | Perubahan yang Diperlukan |
+|---|---|
+| PRD induk, AUTH-05 | Direvisi dari "player, content author, admin" menjadi "player, admin". |
+| SRS induk, 2.3 (Kelas Pengguna) | Baris "Content Author" dihapus; baris "Admin" diperluas cakupannya. |
+| SRS induk, SRS-AUTH-006 | RBAC direvisi dari tiga role menjadi dua role. |
+| SRS induk, UC-12 | Digantikan oleh UC-18 pada SRS Addendum ini (aktor tunggal Admin, tanpa tahap approval terpisah). |
+| SRS induk, kolom `role` pada data dictionary | Enum direvisi dari `player`\|`content_author`\|`admin` menjadi `player`\|`admin`. |
+| SRS Addendum Shop & Redeem, UC-16 | Digantikan oleh UC-20 pada SRS Addendum ini (redaksi yang sama, aktor tetap Admin — tidak ada perubahan substansi karena UC-16 sejak awal sudah beraktor Admin). |
+
+### 19.2.9 Risiko dan Pertanyaan Terbuka
+
+| Topik | Risiko/Pertanyaan | Catatan |
+|---|---|---|
+| Konsentrasi akses pada satu role | Role `admin` tunggal membawa akses sangat luas (data pengguna, ekonomi Koin, kode redeem, konfigurasi scoring). Risiko meningkat bila human error atau kredensial admin bocor. | Dimitigasi oleh 2FA dan audit log wajib pada MVP. Perlu dicatat sebagai catatan arsitektur untuk direvisit (mis. role `moderator` terpisah) bila tim admin membesar. |
+| Fallback pengiriman OTP | Belum ada mekanisme cadangan jika email OTP tidak terkirim/terlambat. | Untuk MVP, email dianggap channel yang cukup andal; perlu dipantau tingkat kegagalan pengiriman di produksi. |
+| Kualitas draft AI-generated | Tanggung jawab kualitas konten sepenuhnya berada di Admin sebagai satu-satunya yang membuat dan menyunting, tanpa pihak kedua yang mengecek ulang. | Validasi otomatis (ADMIN-CASE-03) menjaga konsistensi struktural (ID, field-set), namun kualitas isi (akurasi, bias, kesesuaian tema) tetap sepenuhnya bergantung kedisiplinan Admin saat menyunting draft, tanpa lapisan review formal tambahan. |
+
+
+---
+
+## 20. Lampiran
+
+### 20.1 Glosarium
 
 | Istilah | Definisi |
 |---|---|
@@ -694,5 +1194,5 @@ AI mengembalikan sinyal semantik berikut (bukan skor akhir): mengakui ketidakpas
 | Idempotency Key | Identifier unik pada request mutasi untuk mencegah duplikasi |
 | Session Snapshot | Salinan versi case yang dikunci saat sesi dimulai |
 
-### 19.2 Sumber Dokumen
+### 20.2 Sumber Dokumen
 PRD ini disusun berdasarkan Dokumen Konsep Produk "KODEKABI: Jejak Algoritma" untuk konteks UNESCO Youth Hackathon, mencakup Concept Overview, Value Proposition Canvas, Arsitektur Teknis & Pipeline Sistem, User Journey Map, serta Activity dan Sequence Diagram alur "Penyelesaian Satu Case KODEKABI".

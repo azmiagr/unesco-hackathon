@@ -10,6 +10,8 @@ func Migrate(db *gorm.DB) error {
 	err := db.AutoMigrate(
 		&entity.Role{},
 		&entity.User{},
+		&entity.Case{},
+		&entity.CaseVersion{},
 		&entity.AdminLoginOtpSession{},
 		&entity.OtpCode{},
 		&entity.Avatar{},

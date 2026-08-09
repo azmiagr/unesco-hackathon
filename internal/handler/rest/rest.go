@@ -47,6 +47,10 @@ func (r *Rest) MountEndpoint() {
 	admin.PATCH("/users/:userID/access", r.UpdateAdminUserAccess)
 	admin.DELETE("/users/:userID", r.HardDeleteUserByAdmin)
 
+	cases := admin.Group("/cases")
+	cases.GET("/lookups", r.GetCaseLookupsByAdmin)
+	cases.POST("", r.CreateCaseByAdmin)
+
 }
 
 func (r *Rest) Run() {
