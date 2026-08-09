@@ -41,8 +41,11 @@ func (r *Rest) MountEndpoint() {
 	admin.Use(r.middleware.AuthenticateUser, r.middleware.OnlyAdmin())
 	admin.GET("/users", r.ListAdminUsers)
 	admin.GET("/users/:userID", r.GetAdminUserDetail)
+	admin.GET("roles", r.GetAllRoles)
+	admin.POST("/users", r.CreateUserByAdmin)
+	admin.PATCH("/users/:userID", r.UpdateUserByAdmin)
 	admin.PATCH("/users/:userID/access", r.UpdateAdminUserAccess)
-	admin.DELETE("/users/:userID", r.HardDeleteAdminUser)
+	admin.DELETE("/users/:userID", r.HardDeleteUserByAdmin)
 
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/azmiagr/unesco-hackathon/entity"
 	"github.com/azmiagr/unesco-hackathon/internal/repository"
 	"github.com/azmiagr/unesco-hackathon/model"
+	"github.com/azmiagr/unesco-hackathon/pkg/bcrypt"
 	constants "github.com/azmiagr/unesco-hackathon/pkg/constant"
 	"github.com/azmiagr/unesco-hackathon/pkg/database/mariadb"
 	appErrors "github.com/azmiagr/unesco-hackathon/pkg/errors"
@@ -39,19 +40,30 @@ type IUserService interface {
 	GetUserDetail(userID uuid.UUID) (*model.AdminUserDetailResponse, error)
 	UpdateUserAccess(adminUserID uuid.UUID, targetUserID uuid.UUID, req model.AdminUpdateUserAccessRequest) (*model.AdminUpdateUserAccessResponse, error)
 	HardDeleteUser(adminUserID uuid.UUID, targetUserID uuid.UUID) (*model.AdminDeleteUserResponse, error)
+	CreateUserByAdmin(req model.AdminCreateUserRequest) (*model.AdminCreateUserResponse, error)
+	UpdateUserByAdmin(adminUserID uuid.UUID, targetUserID uuid.UUID, req model.AdminUpdateUserRequest) (*model.AdminUpdateUserResponse, error)
 }
 
 type UserService struct {
-	db       *gorm.DB
-	userRepo repository.IUserRepository
-	roleRepo repository.IRoleRepository
+	db              *gorm.DB
+	userRepo        repository.IUserRepository
+	roleRepo        repository.IRoleRepository
+	userProfileRepo repository.IUserProfileRepository
+	bcrypt          bcrypt.Interface
 }
 
-func NewUserService(userRepo repository.IUserRepository, roleRepo repository.IRoleRepository) IUserService {
+func NewUserService(
+	userRepo repository.IUserRepository,
+	roleRepo repository.IRoleRepository,
+	userProfileRepo repository.IUserProfileRepository,
+	bcrypt bcrypt.Interface,
+) IUserService {
 	return &UserService{
-		db:       mariadb.Connection,
-		userRepo: userRepo,
-		roleRepo: roleRepo,
+		db:              mariadb.Connection,
+		userRepo:        userRepo,
+		roleRepo:        roleRepo,
+		userProfileRepo: userProfileRepo,
+		bcrypt:          bcrypt,
 	}
 }
 
@@ -263,4 +275,229 @@ func (s *UserService) HardDeleteUser(adminUserID uuid.UUID, targetUserID uuid.UU
 		UserID: user.UserID,
 	}, nil
 
+}
+
+func (s *UserService) CreateUserByAdmin(req model.AdminCreateUserRequest) (*model.AdminCreateUserResponse, error) {
+	username := strings.TrimSpace(req.Username)
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	roleName := strings.ToLower(strings.TrimSpace(req.RoleName))
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+
+	if username == "" {
+		return nil, appErrors.BadRequest("username is required")
+	}
+
+	if email == "" {
+		return nil, appErrors.BadRequest("email is required")
+	}
+
+	if req.Password != req.PasswordConfirmation {
+		return nil, appErrors.BadRequest("password confirmation does not match")
+	}
+
+	if roleName == "" || !allowedAdminRoles[roleName] {
+		return nil, appErrors.BadRequest("invalid role")
+	}
+
+	if status == "" || !allowedUserStatuses[status] {
+		return nil, appErrors.BadRequest("invalid status")
+	}
+
+	passwordHash, err := s.bcrypt.GenerateFromPassword(req.Password)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to hash password")
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	emailExists, err := s.userRepo.UserExists(tx, model.GetUserParam{
+		Email: email,
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to check email existence")
+	}
+	if emailExists {
+		return nil, appErrors.Conflict("email already exists")
+	}
+
+	usernameExists, err := s.userRepo.UserExists(tx, model.GetUserParam{
+		Username: username,
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to check username existence")
+	}
+	if usernameExists {
+		return nil, appErrors.Conflict("username already exists")
+	}
+
+	role, err := s.roleRepo.GetRoleByName(tx, roleName)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("role not found")
+		}
+		return nil, appErrors.InternalServer("failed to get role")
+	}
+
+	user := &entity.User{
+		UserID:   uuid.New(),
+		RoleID:   role.RoleID,
+		Username: username,
+		Email:    email,
+		Password: passwordHash,
+		Status:   status,
+	}
+
+	err = s.userRepo.CreateUser(tx, user)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to create user")
+	}
+
+	profile := &entity.UserProfile{
+		UserProfileID:     uuid.New(),
+		UserID:            user.UserID,
+		Title:             model.DefaultRegisterTitle,
+		CurrentLevel:      1,
+		CurrentXP:         0,
+		AuditorReputation: 100,
+	}
+
+	err = s.userProfileRepo.CreateUserProfile(tx, profile)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to create user profile")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	createdUser, err := s.userRepo.GetUserDetail(s.db, user.UserID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get user detail")
+	}
+
+	return &model.AdminCreateUserResponse{
+		User: *createdUser,
+	}, nil
+}
+
+func (s *UserService) UpdateUserByAdmin(adminUserID uuid.UUID, targetUserID uuid.UUID, req model.AdminUpdateUserRequest) (*model.AdminUpdateUserResponse, error) {
+	if targetUserID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid user id")
+	}
+
+	if adminUserID == targetUserID {
+		return nil, appErrors.Forbidden("admin cannot update own account")
+	}
+
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	username := strings.TrimSpace(req.Username)
+	roleName := strings.ToLower(strings.TrimSpace(req.RoleName))
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	password := strings.TrimSpace(req.Password)
+	passwordConfirmation := strings.TrimSpace(req.PasswordConfirmation)
+
+	if email == "" {
+		return nil, appErrors.BadRequest("email is required")
+	}
+
+	if username == "" {
+		return nil, appErrors.BadRequest("username is required")
+	}
+
+	if roleName == "" || !allowedAdminRoles[roleName] {
+		return nil, appErrors.BadRequest("invalid role")
+	}
+
+	if status == "" || !allowedUserStatuses[status] {
+		return nil, appErrors.BadRequest("invalid status")
+	}
+
+	if password != "" {
+		if len(password) < 8 {
+			return nil, appErrors.BadRequest("password must be at least 8 characters")
+		}
+
+		if password != passwordConfirmation {
+			return nil, appErrors.BadRequest("password confirmation does not match")
+		}
+	} else if passwordConfirmation != "" {
+		return nil, appErrors.BadRequest("password is required when password confirmation is provided")
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	user, err := s.userRepo.GetUserForUpdate(tx, targetUserID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("user not found")
+		}
+		return nil, appErrors.InternalServer("failed to get user")
+	}
+
+	if user.Email != email {
+		emailExists, err := s.userRepo.UserExists(tx, model.GetUserParam{
+			Email: email,
+		})
+		if err != nil {
+			return nil, appErrors.InternalServer("failed to check email existence")
+		}
+		if emailExists {
+			return nil, appErrors.Conflict("email already exists")
+		}
+	}
+
+	if user.Username != username {
+		usernameExists, err := s.userRepo.UserExists(tx, model.GetUserParam{
+			Username: username,
+		})
+		if err != nil {
+			return nil, appErrors.InternalServer("failed to check username existence")
+		}
+		if usernameExists {
+			return nil, appErrors.Conflict("username already exists")
+		}
+	}
+
+	role, err := s.roleRepo.GetRoleByName(tx, roleName)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("role not found")
+		}
+		return nil, appErrors.InternalServer("failed to get role")
+	}
+
+	user.Email = email
+	user.Username = username
+	user.RoleID = role.RoleID
+	user.Status = status
+
+	if password != "" {
+		passwordHash, err := s.bcrypt.GenerateFromPassword(password)
+		if err != nil {
+			return nil, appErrors.InternalServer("failed to hash password")
+		}
+		user.Password = passwordHash
+	}
+
+	err = s.userRepo.UpdateUser(tx, user)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update user")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	updatedUser, err := s.userRepo.GetUserDetail(s.db, user.UserID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get user detail")
+	}
+
+	return &model.AdminUpdateUserResponse{
+		User: *updatedUser,
+	}, nil
 }

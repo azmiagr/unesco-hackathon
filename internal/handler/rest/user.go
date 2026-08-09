@@ -70,7 +70,7 @@ func (r *Rest) UpdateAdminUserAccess(c *gin.Context) {
 	response.Success(c, http.StatusOK, "user access updated", result)
 }
 
-func (r *Rest) HardDeleteAdminUser(c *gin.Context) {
+func (r *Rest) HardDeleteUserByAdmin(c *gin.Context) {
 	adminUser, err := helper.GetAuthenticatedUser(c)
 	if err != nil {
 		response.HandleError(c, err)
@@ -90,4 +90,50 @@ func (r *Rest) HardDeleteAdminUser(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, "user deleted", result)
+}
+
+func (r *Rest) CreateUserByAdmin(c *gin.Context) {
+	var req model.AdminCreateUserRequest
+	err := c.ShouldBindJSON(&req)
+	if err != nil {
+		response.HandleError(c, errors.BadRequest("invalid create user request"))
+		return
+	}
+
+	result, err := r.service.UserService.CreateUserByAdmin(req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, "user created", result)
+}
+
+func (r *Rest) UpdateUserByAdmin(c *gin.Context) {
+	adminUser, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	targetUserID, err := helper.ParseUserIDParam(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.AdminUpdateUserRequest
+	err = c.ShouldBindJSON(&req)
+	if err != nil {
+		response.HandleError(c, errors.BadRequest("invalid update user request"))
+		return
+	}
+
+	result, err := r.service.UserService.UpdateUserByAdmin(adminUser.UserID, targetUserID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "user updated", result)
 }

@@ -9,14 +9,17 @@ import (
 type Service struct {
 	UserService IUserService
 	AuthService IAuthService
+	RoleService IRoleService
 }
 
 func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtAuth jwt.Interface) *Service {
-	userService := NewUserService(repository.UserRepository, repository.RoleRepository)
+	userService := NewUserService(repository.UserRepository, repository.RoleRepository, repository.UserProfileRepository, bcrypt)
 	authService := NewAuthService(repository.UserRepository, repository.AvatarRepository, repository.UserProfileRepository, repository.RegistrationSessionRepository, repository.RoleRepository, jwtAuth, bcrypt)
+	roleService := NewRoleService(repository.RoleRepository)
 
 	return &Service{
 		UserService: userService,
 		AuthService: authService,
+		RoleService: roleService,
 	}
 }

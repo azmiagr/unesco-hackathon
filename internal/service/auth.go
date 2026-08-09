@@ -305,7 +305,7 @@ func (s *AuthService) CompleteRegisterProfile(sessionToken string, req model.Com
 	profile := &entity.UserProfile{
 		UserProfileID:     uuid.New(),
 		UserID:            user.UserID,
-		AvatarID:          *session.AvatarID,
+		AvatarID:          session.AvatarID,
 		Title:             title,
 		CurrentLevel:      1,
 		CurrentXP:         0,

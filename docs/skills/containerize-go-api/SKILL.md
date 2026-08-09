@@ -54,6 +54,52 @@ For a pure-Go binary, prefer `CGO_ENABLED=0`. For image codecs, SQLite, or other
 - Use service DNS names such as `db` inside Compose, not `localhost`.
 - Keep production credentials out of Compose defaults.
 
+### GitHub Actions and VPS deployment pattern
+
+When a project deploys to a VPS through GitHub Actions, derive names and paths from the local repository instead of hardcoding template leftovers:
+
+- Use a Compose project name that matches the application or repository slug.
+- Name containers and networks from that project name, for example `<project>-app`, `<project>-db`, and `<project>-net`.
+- Use a GHCR image name based on `GITHUB_REPOSITORY`, with a safe fallback matching the current repository.
+- Keep app host/container port configurable through `.env` `PORT`; set a project-appropriate default.
+- Inside the app container, bind to `0.0.0.0`, not `localhost`.
+- Inside Compose, the app should connect to the database by service name and internal port.
+
+```yaml
+ports:
+  - "${PORT:-8080}:${PORT:-8080}"
+environment:
+  ADDRESS: 0.0.0.0
+  PORT: ${PORT:-8080}
+  DB_HOST: db
+  DB_PORT: 3306
+```
+
+- If host access to MariaDB/MySQL is needed, bind the DB port to VPS localhost only and map host-to-container explicitly:
+
+```yaml
+ports:
+  - "127.0.0.1:<host-db-port>:3306"
+```
+
+- Do not reuse `.env` `DB_PORT` for host mapping unless the project intentionally exposes the same port. `DB_PORT` usually means the internal database port used by the app; host access may be a separate fixed mapping or a separate variable.
+- In `deploy.sh`, set `APP_DIR` to the actual VPS project directory, then `cd "$APP_DIR"` before reading `.env`, pulling images, or running Compose.
+- Support both Compose CLIs:
+
+```bash
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE="docker compose"
+else
+  COMPOSE="docker-compose"
+fi
+```
+
+- GitHub Actions workflow files must live under `.github/workflows/`.
+- A minimal SSH deploy workflow commonly needs repository secrets such as `CR_PAT`, `VPS_HOST`, `VPS_SSH_KEY`, and `VPS_USERNAME`; add `VPS_PORT` only when SSH does not use port 22.
+- The workflow can build and push to GHCR with `GITHUB_TOKEN`, then SSH to the VPS, log in to GHCR with `CR_PAT`, export `GITHUB_REPOSITORY=${{ github.repository }}`, export the project-specific `APP_DIR`, and run `./deploy.sh`.
+- If deployment fails while pulling a public database image with `TLS handshake timeout`, treat it as VPS-to-registry network instability; retry or pre-pull the image on the VPS.
+- For DBeaver or GUI database access, prefer an SSH tunnel to a DB port bound on `127.0.0.1` rather than exposing the database publicly.
+
 ## Choose a migration policy
 
 - Use a separate migration job for replicated or production deployments.
@@ -76,4 +122,3 @@ For a pure-Go binary, prefer `CGO_ENABLED=0`. For image codecs, SQLite, or other
 4. Exercise liveness, readiness, one database-backed endpoint, and graceful stop.
 5. Scan the image for known vulnerabilities and embedded secrets.
 6. Run the same image in CI and production; change configuration, not the artifact.
-

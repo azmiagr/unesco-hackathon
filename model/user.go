@@ -47,26 +47,26 @@ type AdminUserListRow struct {
 }
 
 type AdminUserDetailRow struct {
-	UserID                     uuid.UUID `json:"user_id"`
-	Username                   string    `json:"username"`
-	Email                      string    `json:"email"`
-	RoleID                     uuid.UUID `json:"role_id"`
-	RoleName                   string    `json:"role_name"`
-	Status                     string    `json:"status"`
-	UserProfileID              uuid.UUID `json:"user_profile_id"`
-	AvatarID                   uuid.UUID `json:"avatar_id"`
-	AvatarURL                  string    `json:"avatar_url"`
-	Title                      string    `json:"title"`
-	CurrentLevel               int       `json:"current_level"`
-	CurrentXP                  int       `json:"current_xp"`
-	AuditorReputation          float64   `json:"auditor_reputation"`
-	EvidenceEvaluationScore    float64   `json:"evidence_evaluation_score"`
-	ClaimAnalysisScore         float64   `json:"claim_analysis_score"`
-	ConfidenceCalibrationScore float64   `json:"confidence_calibration_score"`
-	ReasoningScore             float64   `json:"reasoning_score"`
-	SafetyJudgmentScore        float64   `json:"safety_judgment_score"`
-	CreatedAt                  time.Time `json:"created_at"`
-	UpdatedAt                  time.Time `json:"updated_at"`
+	UserID                     uuid.UUID  `json:"user_id"`
+	Username                   string     `json:"username"`
+	Email                      string     `json:"email"`
+	RoleID                     uuid.UUID  `json:"role_id"`
+	RoleName                   string     `json:"role_name"`
+	Status                     string     `json:"status"`
+	UserProfileID              uuid.UUID  `json:"user_profile_id"`
+	AvatarID                   *uuid.UUID `json:"avatar_id"`
+	AvatarURL                  string     `json:"avatar_url"`
+	Title                      string     `json:"title"`
+	CurrentLevel               int        `json:"current_level"`
+	CurrentXP                  int        `json:"current_xp"`
+	AuditorReputation          float64    `json:"auditor_reputation"`
+	EvidenceEvaluationScore    float64    `json:"evidence_evaluation_score"`
+	ClaimAnalysisScore         float64    `json:"claim_analysis_score"`
+	ConfidenceCalibrationScore float64    `json:"confidence_calibration_score"`
+	ReasoningScore             float64    `json:"reasoning_score"`
+	SafetyJudgmentScore        float64    `json:"safety_judgment_score"`
+	CreatedAt                  time.Time  `json:"created_at"`
+	UpdatedAt                  time.Time  `json:"updated_at"`
 }
 
 type AdminUpdateUserAccessParam struct {
@@ -117,4 +117,30 @@ type AdminUpdateUserAccessResponse struct {
 
 type AdminDeleteUserResponse struct {
 	UserID uuid.UUID `json:"user_id"`
+}
+
+type AdminCreateUserRequest struct {
+	Username             string `json:"username" binding:"required,min=3,max=16"`
+	Email                string `json:"email" binding:"required,email"`
+	Password             string `json:"password" binding:"required,min=8"`
+	PasswordConfirmation string `json:"password_confirmation" binding:"required,min=8"`
+	RoleName             string `json:"role_name" binding:"required"`
+	Status               string `json:"status" binding:"required"`
+}
+
+type AdminCreateUserResponse struct {
+	User AdminUserDetailRow `json:"user"`
+}
+
+type AdminUpdateUserRequest struct {
+	Email                string `json:"email" binding:"required,email"`
+	Username             string `json:"username" binding:"required,min=3,max=16"`
+	Password             string `json:"password"`
+	PasswordConfirmation string `json:"password_confirmation"`
+	RoleName             string `json:"role_name" binding:"required"`
+	Status               string `json:"status" binding:"required"`
+}
+
+type AdminUpdateUserResponse struct {
+	User AdminUserDetailRow `json:"user"`
 }

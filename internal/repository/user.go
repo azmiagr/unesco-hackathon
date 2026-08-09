@@ -21,6 +21,7 @@ type IUserRepository interface {
 	GetUserForUpdate(tx *gorm.DB, userID uuid.UUID) (*entity.User, error)
 	UpdateUserAccess(tx *gorm.DB, param model.AdminUpdateUserAccessParam) error
 	HardDeleteUser(tx *gorm.DB, userID uuid.UUID) error
+	UserExists(tx *gorm.DB, param model.GetUserParam) (bool, error)
 }
 
 type UserRepository struct {
@@ -258,4 +259,27 @@ func (r *UserRepository) HardDeleteUser(tx *gorm.DB, userID uuid.UUID) error {
 	}
 
 	return nil
+}
+
+func (r *UserRepository) UserExists(tx *gorm.DB, param model.GetUserParam) (bool, error) {
+	var count int64
+
+	query := tx.Model(&entity.User{})
+
+	if param.UserID != uuid.Nil {
+		query = query.Where("user_id = ?", param.UserID)
+	}
+	if param.Email != "" {
+		query = query.Where("email = ?", param.Email)
+	}
+	if param.Username != "" {
+		query = query.Where("username = ?", param.Username)
+	}
+
+	err := query.Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
 }
