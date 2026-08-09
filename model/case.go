@@ -183,6 +183,13 @@ type AdminCaseDetailResponse struct {
 	Evidences []AdminCaseEvidenceListRow `json:"evidences"`
 }
 
+type AdminListCaseEvidencesResponse struct {
+	CaseID        uuid.UUID                  `json:"case_id"`
+	CaseVersionID *uuid.UUID                 `json:"case_version_id"`
+	Total         int                        `json:"total"`
+	Evidences     []AdminCaseEvidenceListRow `json:"evidences"`
+}
+
 type CaseLookupOptionResponse struct {
 	Value string `json:"value"`
 	Label string `json:"label"`

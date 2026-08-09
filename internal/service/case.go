@@ -77,6 +77,7 @@ type ICaseService interface {
 	CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCreateCaseRequest) (*model.AdminCreateCaseResponse, error)
 	ListCasesByAdmin(req model.AdminListCasesRequest) (*model.AdminListCasesResponse, error)
 	GetCaseDetailByAdmin(caseID uuid.UUID) (*model.AdminCaseDetailResponse, error)
+	ListCaseEvidencesByAdmin(caseID uuid.UUID) (*model.AdminListCaseEvidencesResponse, error)
 	GetCaseLookups() (*model.AdminCaseLookupsResponse, error)
 	CreateSocialPostEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateSocialPostEvidenceRequest) (*model.AdminCreateSocialPostEvidenceResponse, error)
 	CreateArticleEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateArticleEvidenceRequest) (*model.AdminCreateArticleEvidenceResponse, error)
@@ -381,6 +382,35 @@ func (s *CaseService) GetCaseDetailByAdmin(caseID uuid.UUID) (*model.AdminCaseDe
 	return &model.AdminCaseDetailResponse{
 		Case:      *caseDetail,
 		Evidences: evidences,
+	}, nil
+}
+
+func (s *CaseService) ListCaseEvidencesByAdmin(caseID uuid.UUID) (*model.AdminListCaseEvidencesResponse, error) {
+	if caseID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case id")
+	}
+
+	caseDetail, err := s.caseRepo.GetAdminCaseDetail(s.db, caseID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case detail")
+	}
+
+	evidences := []model.AdminCaseEvidenceListRow{}
+	if caseDetail.CurrentCaseVersionID != nil {
+		evidences, err = s.caseEvidenceRepo.ListAdminCaseEvidenceRows(s.db, *caseDetail.CurrentCaseVersionID)
+		if err != nil {
+			return nil, appErrors.InternalServer("failed to list case evidences")
+		}
+	}
+
+	return &model.AdminListCaseEvidencesResponse{
+		CaseID:        caseDetail.CaseID,
+		CaseVersionID: caseDetail.CurrentCaseVersionID,
+		Total:         len(evidences),
+		Evidences:     evidences,
 	}, nil
 }
 

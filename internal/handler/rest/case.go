@@ -77,6 +77,22 @@ func (r *Rest) GetCaseDetailByAdmin(c *gin.Context) {
 	response.Success(c, http.StatusOK, "case detail retrieved", result)
 }
 
+func (r *Rest) ListCaseEvidencesByAdmin(c *gin.Context) {
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.CaseService.ListCaseEvidencesByAdmin(caseID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "case evidences retrieved", result)
+}
+
 func (r *Rest) GetCaseLookupsByAdmin(c *gin.Context) {
 	result, err := r.service.CaseService.GetCaseLookups()
 	if err != nil {
