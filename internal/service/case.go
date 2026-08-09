@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"mime/multipart"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -27,6 +28,7 @@ const (
 	maxSocialPostLabelLength = 150
 	defaultAdminCaseLimit    = 10
 	maxAdminCaseLimit        = 100
+	maxEvidenceLabelLength   = 150
 )
 
 var allowedCaseThemes = map[string]bool{
@@ -77,6 +79,11 @@ type ICaseService interface {
 	GetCaseDetailByAdmin(caseID uuid.UUID) (*model.AdminCaseDetailResponse, error)
 	GetCaseLookups() (*model.AdminCaseLookupsResponse, error)
 	CreateSocialPostEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateSocialPostEvidenceRequest) (*model.AdminCreateSocialPostEvidenceResponse, error)
+	CreateArticleEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateArticleEvidenceRequest) (*model.AdminCreateArticleEvidenceResponse, error)
+	CreateBlogEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateBlogEvidenceRequest) (*model.AdminCreateBlogEvidenceResponse, error)
+	CreateForumThreadEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateForumThreadEvidenceRequest) (*model.AdminCreateForumThreadEvidenceResponse, error)
+	CreateChatTranscriptEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateChatTranscriptEvidenceRequest) (*model.AdminCreateChatTranscriptEvidenceResponse, error)
+	CreatePublicAnnouncementEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreatePublicAnnouncementEvidenceRequest) (*model.AdminCreatePublicAnnouncementEvidenceResponse, error)
 }
 
 type CaseService struct {
@@ -547,6 +554,854 @@ func (s *CaseService) CreateSocialPostEvidenceByAdmin(
 	return &model.AdminCreateSocialPostEvidenceResponse{
 		Evidence: mapSocialPostEvidenceResponse(evidence, socialPost, credibilityTags),
 	}, nil
+}
+
+func (s *CaseService) CreateArticleEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	req model.AdminCreateArticleEvidenceRequest,
+) (*model.AdminCreateArticleEvidenceResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	if caseID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case id")
+	}
+
+	if caseVersionID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case version id")
+	}
+
+	label, err := helper.RequireTrimmedString(req.Label, "label is required")
+	if err != nil {
+		return nil, err
+	}
+
+	headline, err := helper.RequireTrimmedString(req.Headline, "headline is required")
+	if err != nil {
+		return nil, err
+	}
+
+	sourceName, err := helper.RequireTrimmedString(req.SourceName, "source name is required")
+	if err != nil {
+		return nil, err
+	}
+
+	authorName, err := helper.RequireTrimmedString(req.AuthorName, "author name is required")
+	if err != nil {
+		return nil, err
+	}
+
+	bodyText, err := helper.RequireTrimmedString(req.BodyText, "body text is required")
+	if err != nil {
+		return nil, err
+	}
+
+	imagePrompt := strings.TrimSpace(req.ImagePrompt)
+
+	if len(label) > maxEvidenceLabelLength {
+		return nil, appErrors.BadRequest("label is too long")
+	}
+
+	credibilityTags, credibilityTagsJSON, err := normalizeCredibilityTags(req.CredibilityTags)
+	if err != nil {
+		return nil, err
+	}
+
+	publishDate, err := parseEvidencePublishDate(req.PublishDate)
+	if err != nil {
+		return nil, err
+	}
+
+	articleURL, err := normalizeOptionalURL(req.URL)
+	if err != nil {
+		return nil, err
+	}
+
+	imageURL, err := s.uploadEvidenceImage(req.Image)
+	if err != nil {
+		return nil, err
+	}
+
+	shouldDeleteImage := imageURL != nil
+	defer func() {
+		if shouldDeleteImage && imageURL != nil {
+			_ = supabase.DeleteFileIfPresent(s.storage, *imageURL)
+		}
+	}()
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	caseVersion, err := s.caseVersionRepo.GetCaseVersionForUpdate(tx, caseVersionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case version not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case version")
+	}
+
+	if caseVersion.CaseID != caseID {
+		return nil, appErrors.NotFound("case version not found")
+	}
+
+	if caseVersion.Status != model.CaseStatusDraft {
+		return nil, appErrors.Conflict("case version is not editable")
+	}
+
+	evidence := &entity.CaseEvidence{
+		CaseEvidenceID:  uuid.New(),
+		CaseVersionID:   caseVersion.CaseVersionID,
+		TemplateType:    model.CaseEvidenceTemplateArticle,
+		Label:           label,
+		CredibilityTags: credibilityTagsJSON,
+		IsCritical:      req.IsCritical,
+		SortOrder:       req.SortOrder,
+	}
+
+	article := &entity.CaseEvidenceArticle{
+		CaseEvidenceID: evidence.CaseEvidenceID,
+		Headline:       headline,
+		SourceName:     sourceName,
+		AuthorName:     authorName,
+		PublishDate:    publishDate,
+		URL:            articleURL,
+		BodyText:       bodyText,
+		ImagePrompt:    optionalString(imagePrompt),
+		ImageURL:       imageURL,
+	}
+
+	err = s.caseEvidenceRepo.CreateArticleEvidence(tx, evidence, article)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to create article evidence")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	shouldDeleteImage = false
+
+	return &model.AdminCreateArticleEvidenceResponse{
+		Evidence: mapArticleEvidenceResponse(evidence, article, credibilityTags),
+	}, nil
+}
+
+func (s *CaseService) CreateBlogEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	req model.AdminCreateBlogEvidenceRequest,
+) (*model.AdminCreateBlogEvidenceResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	if caseID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case id")
+	}
+
+	if caseVersionID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case version id")
+	}
+
+	label, err := helper.RequireTrimmedString(req.Label, "label is required")
+	if err != nil {
+		return nil, err
+	}
+
+	title, err := helper.RequireTrimmedString(req.Title, "title is required")
+	if err != nil {
+		return nil, err
+	}
+
+	authorName, err := helper.RequireTrimmedString(req.AuthorName, "author name is required")
+	if err != nil {
+		return nil, err
+	}
+
+	blogName, err := helper.RequireTrimmedString(req.BlogName, "blog name is required")
+	if err != nil {
+		return nil, err
+	}
+
+	bodyText, err := helper.RequireTrimmedString(req.BodyText, "body text is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(label) > maxEvidenceLabelLength {
+		return nil, appErrors.BadRequest("label is too long")
+	}
+
+	credibilityTags, credibilityTagsJSON, err := normalizeCredibilityTags(req.CredibilityTags)
+	if err != nil {
+		return nil, err
+	}
+
+	publishDate, err := parseEvidencePublishDate(req.PublishDate)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	caseVersion, err := s.caseVersionRepo.GetCaseVersionForUpdate(tx, caseVersionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case version not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case version")
+	}
+
+	if caseVersion.CaseID != caseID {
+		return nil, appErrors.NotFound("case version not found")
+	}
+
+	if caseVersion.Status != model.CaseStatusDraft {
+		return nil, appErrors.Conflict("case version is not editable")
+	}
+
+	evidence := &entity.CaseEvidence{
+		CaseEvidenceID:  uuid.New(),
+		CaseVersionID:   caseVersion.CaseVersionID,
+		TemplateType:    model.CaseEvidenceTemplateBlog,
+		Label:           label,
+		CredibilityTags: credibilityTagsJSON,
+		IsCritical:      req.IsCritical,
+		SortOrder:       req.SortOrder,
+	}
+
+	blog := &entity.CaseEvidenceBlog{
+		CaseEvidenceID: evidence.CaseEvidenceID,
+		Title:          title,
+		AuthorName:     authorName,
+		BlogName:       blogName,
+		PublishDate:    publishDate,
+		BodyText:       bodyText,
+	}
+
+	err = s.caseEvidenceRepo.CreateBlogEvidence(tx, evidence, blog)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to create blog evidence")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminCreateBlogEvidenceResponse{
+		Evidence: mapBlogEvidenceResponse(evidence, blog, credibilityTags),
+	}, nil
+}
+
+func (s *CaseService) CreateForumThreadEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	req model.AdminCreateForumThreadEvidenceRequest,
+) (*model.AdminCreateForumThreadEvidenceResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	if caseID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case id")
+	}
+
+	if caseVersionID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case version id")
+	}
+
+	label, err := helper.RequireTrimmedString(req.Label, "label is required")
+	if err != nil {
+		return nil, err
+	}
+
+	threadTitle, err := helper.RequireTrimmedString(req.ThreadTitle, "thread title is required")
+	if err != nil {
+		return nil, err
+	}
+
+	forumName, err := helper.RequireTrimmedString(req.ForumName, "forum name is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(label) > maxEvidenceLabelLength {
+		return nil, appErrors.BadRequest("label is too long")
+	}
+
+	credibilityTags, credibilityTagsJSON, err := normalizeCredibilityTagItems(req.CredibilityTags)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(req.Posts) == 0 {
+		return nil, appErrors.BadRequest("posts are required")
+	}
+
+	evidenceID := uuid.New()
+	posts := make([]entity.CaseEvidenceForumThreadPost, 0, len(req.Posts))
+
+	for i, postReq := range req.Posts {
+		authorName, err := helper.RequireTrimmedString(postReq.AuthorName, "post author name is required")
+		if err != nil {
+			return nil, err
+		}
+
+		text, err := helper.RequireTrimmedString(postReq.Text, "post text is required")
+		if err != nil {
+			return nil, err
+		}
+
+		timestamp, err := parseEvidenceTimestamp(postReq.Timestamp)
+		if err != nil {
+			return nil, err
+		}
+
+		if postReq.UpvoteCount < 0 {
+			return nil, appErrors.BadRequest("upvote count cannot be negative")
+		}
+
+		posts = append(posts, entity.CaseEvidenceForumThreadPost{
+			CaseEvidenceForumThreadPostID: uuid.New(),
+			CaseEvidenceID:                evidenceID,
+			AuthorName:                    authorName,
+			Text:                          text,
+			Timestamp:                     timestamp,
+			UpvoteCount:                   postReq.UpvoteCount,
+			SortOrder:                     i + 1,
+		})
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	caseVersion, err := s.caseVersionRepo.GetCaseVersionForUpdate(tx, caseVersionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case version not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case version")
+	}
+
+	if caseVersion.CaseID != caseID {
+		return nil, appErrors.NotFound("case version not found")
+	}
+
+	if caseVersion.Status != model.CaseStatusDraft {
+		return nil, appErrors.Conflict("case version is not editable")
+	}
+
+	evidence := &entity.CaseEvidence{
+		CaseEvidenceID:  evidenceID,
+		CaseVersionID:   caseVersion.CaseVersionID,
+		TemplateType:    model.CaseEvidenceTemplateForumThread,
+		Label:           label,
+		CredibilityTags: credibilityTagsJSON,
+		IsCritical:      req.IsCritical,
+		SortOrder:       req.SortOrder,
+	}
+
+	forumThread := &entity.CaseEvidenceForumThread{
+		CaseEvidenceID: evidence.CaseEvidenceID,
+		ThreadTitle:    threadTitle,
+		ForumName:      forumName,
+	}
+
+	err = s.caseEvidenceRepo.CreateForumThreadEvidence(tx, evidence, forumThread, posts)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to create forum thread evidence")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminCreateForumThreadEvidenceResponse{
+		Evidence: mapForumThreadEvidenceResponse(evidence, forumThread, posts, credibilityTags),
+	}, nil
+}
+
+func (s *CaseService) CreateChatTranscriptEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	req model.AdminCreateChatTranscriptEvidenceRequest,
+) (*model.AdminCreateChatTranscriptEvidenceResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	if caseID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case id")
+	}
+
+	if caseVersionID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case version id")
+	}
+
+	label, err := helper.RequireTrimmedString(req.Label, "label is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(label) > maxEvidenceLabelLength {
+		return nil, appErrors.BadRequest("label is too long")
+	}
+
+	credibilityTags, credibilityTagsJSON, err := normalizeCredibilityTagItems(req.CredibilityTags)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(req.Participants) == 0 {
+		return nil, appErrors.BadRequest("participants are required")
+	}
+
+	if len(req.Messages) == 0 {
+		return nil, appErrors.BadRequest("messages are required")
+	}
+
+	evidenceID := uuid.New()
+
+	participantEntities := make([]entity.CaseEvidenceChatTranscriptParticipant, 0, len(req.Participants))
+	participantSet := map[string]bool{}
+
+	for i, participant := range req.Participants {
+		name, err := helper.RequireTrimmedString(participant, "participant name is required")
+		if err != nil {
+			return nil, err
+		}
+
+		if participantSet[name] {
+			return nil, appErrors.BadRequest("participants cannot contain duplicates")
+		}
+
+		participantSet[name] = true
+		participantEntities = append(participantEntities, entity.CaseEvidenceChatTranscriptParticipant{
+			CaseEvidenceChatTranscriptParticipantID: uuid.New(),
+			CaseEvidenceID:                          evidenceID,
+			Name:                                    name,
+			SortOrder:                               i + 1,
+		})
+	}
+
+	messageEntities := make([]entity.CaseEvidenceChatTranscriptMessage, 0, len(req.Messages))
+
+	for i, messageReq := range req.Messages {
+		sender, err := helper.RequireTrimmedString(messageReq.Sender, "message sender is required")
+		if err != nil {
+			return nil, err
+		}
+
+		if !participantSet[sender] {
+			return nil, appErrors.BadRequest("message sender must be one of participants")
+		}
+
+		text, err := helper.RequireTrimmedString(messageReq.Text, "message text is required")
+		if err != nil {
+			return nil, err
+		}
+
+		timestamp, err := parseEvidenceTimestamp(messageReq.Timestamp)
+		if err != nil {
+			return nil, err
+		}
+
+		messageEntities = append(messageEntities, entity.CaseEvidenceChatTranscriptMessage{
+			CaseEvidenceChatTranscriptMessageID: uuid.New(),
+			CaseEvidenceID:                      evidenceID,
+			Sender:                              sender,
+			Text:                                text,
+			Timestamp:                           timestamp,
+			SortOrder:                           i + 1,
+		})
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	caseVersion, err := s.caseVersionRepo.GetCaseVersionForUpdate(tx, caseVersionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case version not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case version")
+	}
+
+	if caseVersion.CaseID != caseID {
+		return nil, appErrors.NotFound("case version not found")
+	}
+
+	if caseVersion.Status != model.CaseStatusDraft {
+		return nil, appErrors.Conflict("case version is not editable")
+	}
+
+	evidence := &entity.CaseEvidence{
+		CaseEvidenceID:  evidenceID,
+		CaseVersionID:   caseVersion.CaseVersionID,
+		TemplateType:    model.CaseEvidenceTemplateChatTranscript,
+		Label:           label,
+		CredibilityTags: credibilityTagsJSON,
+		IsCritical:      req.IsCritical,
+		SortOrder:       req.SortOrder,
+	}
+
+	chatTranscript := &entity.CaseEvidenceChatTranscript{
+		CaseEvidenceID: evidence.CaseEvidenceID,
+	}
+
+	err = s.caseEvidenceRepo.CreateChatTranscriptEvidence(tx, evidence, chatTranscript, participantEntities, messageEntities)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to create chat transcript evidence")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminCreateChatTranscriptEvidenceResponse{
+		Evidence: mapChatTranscriptEvidenceResponse(evidence, participantEntities, messageEntities, credibilityTags),
+	}, nil
+}
+
+func (s *CaseService) CreatePublicAnnouncementEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	req model.AdminCreatePublicAnnouncementEvidenceRequest,
+) (*model.AdminCreatePublicAnnouncementEvidenceResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	if caseID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case id")
+	}
+
+	if caseVersionID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case version id")
+	}
+
+	label, err := helper.RequireTrimmedString(req.Label, "label is required")
+	if err != nil {
+		return nil, err
+	}
+
+	issuingBody, err := helper.RequireTrimmedString(req.IssuingBody, "issuing body is required")
+	if err != nil {
+		return nil, err
+	}
+
+	title, err := helper.RequireTrimmedString(req.Title, "title is required")
+	if err != nil {
+		return nil, err
+	}
+
+	bodyText, err := helper.RequireTrimmedString(req.BodyText, "body text is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(label) > maxEvidenceLabelLength {
+		return nil, appErrors.BadRequest("label is too long")
+	}
+
+	credibilityTags, credibilityTagsJSON, err := normalizeCredibilityTagItems(req.CredibilityTags)
+	if err != nil {
+		return nil, err
+	}
+
+	announcementDate, err := parseEvidencePublishDate(req.Date)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	caseVersion, err := s.caseVersionRepo.GetCaseVersionForUpdate(tx, caseVersionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case version not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case version")
+	}
+
+	if caseVersion.CaseID != caseID {
+		return nil, appErrors.NotFound("case version not found")
+	}
+
+	if caseVersion.Status != model.CaseStatusDraft {
+		return nil, appErrors.Conflict("case version is not editable")
+	}
+
+	evidence := &entity.CaseEvidence{
+		CaseEvidenceID:  uuid.New(),
+		CaseVersionID:   caseVersion.CaseVersionID,
+		TemplateType:    model.CaseEvidenceTemplatePublicAnnouncement,
+		Label:           label,
+		CredibilityTags: credibilityTagsJSON,
+		IsCritical:      req.IsCritical,
+		SortOrder:       req.SortOrder,
+	}
+
+	publicAnnouncement := &entity.CaseEvidencePublicAnnouncement{
+		CaseEvidenceID: evidence.CaseEvidenceID,
+		IssuingBody:    issuingBody,
+		Title:          title,
+		Date:           announcementDate,
+		BodyText:       bodyText,
+	}
+
+	err = s.caseEvidenceRepo.CreatePublicAnnouncementEvidence(tx, evidence, publicAnnouncement)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to create public announcement evidence")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminCreatePublicAnnouncementEvidenceResponse{
+		Evidence: mapPublicAnnouncementEvidenceResponse(evidence, publicAnnouncement, credibilityTags),
+	}, nil
+}
+
+func parseEvidencePublishDate(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, appErrors.BadRequest("publish date is required")
+	}
+
+	layouts := []string{
+		"2006-01-02",
+		time.RFC3339,
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05",
+	}
+
+	for _, layout := range layouts {
+		value, err := time.Parse(layout, raw)
+		if err == nil {
+			return value.UTC(), nil
+		}
+	}
+
+	return time.Time{}, appErrors.BadRequest("invalid publish date")
+}
+
+func normalizeOptionalURL(raw string) (*string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+
+	parsedURL, err := url.ParseRequestURI(raw)
+	if err != nil {
+		return nil, appErrors.BadRequest("invalid url")
+	}
+
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nil, appErrors.BadRequest("url must use http or https")
+	}
+
+	return &raw, nil
+}
+
+func mapArticleEvidenceResponse(
+	evidence *entity.CaseEvidence,
+	article *entity.CaseEvidenceArticle,
+	credibilityTags []string,
+) model.AdminArticleEvidenceResponse {
+	return model.AdminArticleEvidenceResponse{
+		CaseEvidenceID:  evidence.CaseEvidenceID,
+		CaseVersionID:   evidence.CaseVersionID,
+		TemplateType:    evidence.TemplateType,
+		Label:           evidence.Label,
+		CredibilityTags: credibilityTags,
+		IsCritical:      evidence.IsCritical,
+		SortOrder:       evidence.SortOrder,
+		Headline:        article.Headline,
+		SourceName:      article.SourceName,
+		AuthorName:      article.AuthorName,
+		PublishDate:     article.PublishDate,
+		URL:             article.URL,
+		BodyText:        article.BodyText,
+		ImagePrompt:     article.ImagePrompt,
+		ImageURL:        article.ImageURL,
+		CreatedAt:       evidence.CreatedAt,
+		UpdatedAt:       evidence.UpdatedAt,
+	}
+}
+
+func mapBlogEvidenceResponse(
+	evidence *entity.CaseEvidence,
+	blog *entity.CaseEvidenceBlog,
+	credibilityTags []string,
+) model.AdminBlogEvidenceResponse {
+	return model.AdminBlogEvidenceResponse{
+		CaseEvidenceID:  evidence.CaseEvidenceID,
+		CaseVersionID:   evidence.CaseVersionID,
+		TemplateType:    evidence.TemplateType,
+		Label:           evidence.Label,
+		CredibilityTags: credibilityTags,
+		IsCritical:      evidence.IsCritical,
+		SortOrder:       evidence.SortOrder,
+		Title:           blog.Title,
+		AuthorName:      blog.AuthorName,
+		BlogName:        blog.BlogName,
+		PublishDate:     blog.PublishDate,
+		BodyText:        blog.BodyText,
+		CreatedAt:       evidence.CreatedAt,
+		UpdatedAt:       evidence.UpdatedAt,
+	}
+}
+
+func mapForumThreadEvidenceResponse(
+	evidence *entity.CaseEvidence,
+	forumThread *entity.CaseEvidenceForumThread,
+	posts []entity.CaseEvidenceForumThreadPost,
+	credibilityTags []string,
+) model.AdminForumThreadEvidenceResponse {
+	postResponses := make([]model.AdminForumThreadPostResponse, 0, len(posts))
+	for _, post := range posts {
+		postResponses = append(postResponses, model.AdminForumThreadPostResponse{
+			CaseEvidenceForumThreadPostID: post.CaseEvidenceForumThreadPostID,
+			CaseEvidenceID:                post.CaseEvidenceID,
+			AuthorName:                    post.AuthorName,
+			Text:                          post.Text,
+			Timestamp:                     post.Timestamp,
+			UpvoteCount:                   post.UpvoteCount,
+			SortOrder:                     post.SortOrder,
+			CreatedAt:                     post.CreatedAt,
+			UpdatedAt:                     post.UpdatedAt,
+		})
+	}
+
+	return model.AdminForumThreadEvidenceResponse{
+		CaseEvidenceID:  evidence.CaseEvidenceID,
+		CaseVersionID:   evidence.CaseVersionID,
+		TemplateType:    evidence.TemplateType,
+		Label:           evidence.Label,
+		CredibilityTags: credibilityTags,
+		IsCritical:      evidence.IsCritical,
+		SortOrder:       evidence.SortOrder,
+		ThreadTitle:     forumThread.ThreadTitle,
+		ForumName:       forumThread.ForumName,
+		Posts:           postResponses,
+		CreatedAt:       evidence.CreatedAt,
+		UpdatedAt:       evidence.UpdatedAt,
+	}
+}
+
+func mapChatTranscriptEvidenceResponse(
+	evidence *entity.CaseEvidence,
+	participants []entity.CaseEvidenceChatTranscriptParticipant,
+	messages []entity.CaseEvidenceChatTranscriptMessage,
+	credibilityTags []string,
+) model.AdminChatTranscriptEvidenceResponse {
+	participantResponses := make([]model.AdminChatTranscriptParticipantResponse, 0, len(participants))
+	for _, participant := range participants {
+		participantResponses = append(participantResponses, model.AdminChatTranscriptParticipantResponse{
+			CaseEvidenceChatTranscriptParticipantID: participant.CaseEvidenceChatTranscriptParticipantID,
+			CaseEvidenceID:                          participant.CaseEvidenceID,
+			Name:                                    participant.Name,
+			SortOrder:                               participant.SortOrder,
+			CreatedAt:                               participant.CreatedAt,
+			UpdatedAt:                               participant.UpdatedAt,
+		})
+	}
+
+	messageResponses := make([]model.AdminChatTranscriptMessageResponse, 0, len(messages))
+	for _, message := range messages {
+		messageResponses = append(messageResponses, model.AdminChatTranscriptMessageResponse{
+			CaseEvidenceChatTranscriptMessageID: message.CaseEvidenceChatTranscriptMessageID,
+			CaseEvidenceID:                      message.CaseEvidenceID,
+			Sender:                              message.Sender,
+			Text:                                message.Text,
+			Timestamp:                           message.Timestamp,
+			SortOrder:                           message.SortOrder,
+			CreatedAt:                           message.CreatedAt,
+			UpdatedAt:                           message.UpdatedAt,
+		})
+	}
+
+	return model.AdminChatTranscriptEvidenceResponse{
+		CaseEvidenceID:  evidence.CaseEvidenceID,
+		CaseVersionID:   evidence.CaseVersionID,
+		TemplateType:    evidence.TemplateType,
+		Label:           evidence.Label,
+		CredibilityTags: credibilityTags,
+		IsCritical:      evidence.IsCritical,
+		SortOrder:       evidence.SortOrder,
+		Participants:    participantResponses,
+		Messages:        messageResponses,
+		CreatedAt:       evidence.CreatedAt,
+		UpdatedAt:       evidence.UpdatedAt,
+	}
+}
+
+func mapPublicAnnouncementEvidenceResponse(
+	evidence *entity.CaseEvidence,
+	publicAnnouncement *entity.CaseEvidencePublicAnnouncement,
+	credibilityTags []string,
+) model.AdminPublicAnnouncementEvidenceResponse {
+	return model.AdminPublicAnnouncementEvidenceResponse{
+		CaseEvidenceID:  evidence.CaseEvidenceID,
+		CaseVersionID:   evidence.CaseVersionID,
+		TemplateType:    evidence.TemplateType,
+		Label:           evidence.Label,
+		CredibilityTags: credibilityTags,
+		IsCritical:      evidence.IsCritical,
+		SortOrder:       evidence.SortOrder,
+		IssuingBody:     publicAnnouncement.IssuingBody,
+		Title:           publicAnnouncement.Title,
+		Date:            publicAnnouncement.Date,
+		BodyText:        publicAnnouncement.BodyText,
+		CreatedAt:       evidence.CreatedAt,
+		UpdatedAt:       evidence.UpdatedAt,
+	}
+}
+
+func normalizeCredibilityTagItems(tags []string) ([]string, string, error) {
+	normalizedTags := make([]string, 0, len(tags))
+	seen := map[string]bool{}
+
+	for _, tag := range tags {
+		normalizedTag := strings.ToLower(strings.TrimSpace(tag))
+		if normalizedTag == "" {
+			continue
+		}
+
+		if seen[normalizedTag] {
+			continue
+		}
+
+		seen[normalizedTag] = true
+		normalizedTags = append(normalizedTags, normalizedTag)
+	}
+
+	if len(normalizedTags) == 0 {
+		return nil, "", appErrors.BadRequest("credibility tags are required")
+	}
+
+	payload, err := json.Marshal(normalizedTags)
+	if err != nil {
+		return nil, "", appErrors.InternalServer("failed to normalize credibility tags")
+	}
+
+	return normalizedTags, string(payload), nil
 }
 
 func normalizeCredibilityTags(raw string) ([]string, string, error) {

@@ -17,5 +17,10 @@ type CaseEvidence struct {
 	CreatedAt       time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt       time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 
-	SocialPost *CaseEvidenceSocialPost `gorm:"foreignKey:CaseEvidenceID;references:CaseEvidenceID;constraint:onDelete:CASCADE"`
+	SocialPost         *CaseEvidenceSocialPost         `gorm:"foreignKey:CaseEvidenceID;references:CaseEvidenceID;constraint:onDelete:CASCADE"`
+	Article            *CaseEvidenceArticle            `gorm:"foreignKey:CaseEvidenceID;references:CaseEvidenceID;constraint:onDelete:CASCADE"`
+	Blog               *CaseEvidenceBlog               `gorm:"foreignKey:CaseEvidenceID;references:CaseEvidenceID;constraint:onDelete:CASCADE"`
+	ForumThread        *CaseEvidenceForumThread        `gorm:"foreignKey:CaseEvidenceID;references:CaseEvidenceID;constraint:onDelete:CASCADE"`
+	ChatTranscript     *CaseEvidenceChatTranscript     `gorm:"foreignKey:CaseEvidenceID;references:CaseEvidenceID;constraint:onDelete:CASCADE"`
+	PublicAnnouncement *CaseEvidencePublicAnnouncement `gorm:"foreignKey:CaseEvidenceID;references:CaseEvidenceID;constraint:onDelete:CASCADE"`
 }

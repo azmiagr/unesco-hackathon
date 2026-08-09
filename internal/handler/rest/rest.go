@@ -53,7 +53,11 @@ func (r *Rest) MountEndpoint() {
 	cases.GET("/:caseID", r.GetCaseDetailByAdmin)
 	cases.POST("", r.CreateCaseByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/evidences/social-post", r.CreateSocialPostEvidenceByAdmin)
-
+	cases.POST("/:caseID/versions/:caseVersionID/evidences/article", r.CreateArticleEvidenceByAdmin)
+	cases.POST("/:caseID/versions/:caseVersionID/evidences/blog", r.CreateBlogEvidenceByAdmin)
+	cases.POST("/:caseID/versions/:caseVersionID/evidences/forum-thread", r.CreateForumThreadEvidenceByAdmin)
+	cases.POST("/:caseID/versions/:caseVersionID/evidences/chat-transcript", r.CreateChatTranscriptEvidenceByAdmin)
+	cases.POST("/:caseID/versions/:caseVersionID/evidences/public-announcement", r.CreatePublicAnnouncementEvidenceByAdmin)
 }
 
 func (r *Rest) Run() {
