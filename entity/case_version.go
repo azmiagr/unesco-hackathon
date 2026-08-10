@@ -23,5 +23,6 @@ type CaseVersion struct {
 	UpdatedAt     time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
 	DeletedAt     gorm.DeletedAt `json:"deleted_at" gorm:"index"`
 
-	Evidences []CaseEvidence `gorm:"foreignKey:CaseVersionID;references:CaseVersionID;constraint:onDelete:CASCADE"`
+	Evidences     []CaseEvidence `gorm:"foreignKey:CaseVersionID;references:CaseVersionID;constraint:onDelete:CASCADE"`
+	QuestionsList []CaseQuestion `gorm:"foreignKey:CaseVersionID;references:CaseVersionID;constraint:onDelete:CASCADE"`
 }

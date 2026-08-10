@@ -208,6 +208,10 @@ func (r *CaseRepository) buildAdminCaseQuery(tx *gorm.DB) *gorm.DB {
 		Joins(`
 			LEFT JOIN case_evidences
 				ON case_evidences.case_version_id = current_versions.case_version_id
+		`).
+		Joins(`
+			LEFT JOIN case_questions
+				ON case_questions.case_version_id = current_versions.case_version_id
 		`)
 }
 
@@ -260,8 +264,8 @@ func adminCaseSelectColumns() []string {
 		"cases.thumbnail_prompt",
 		"cases.generation_source",
 		"cases.status",
-		"COALESCE(JSON_LENGTH(current_versions.questions), 0) AS question_count",
-		"COUNT(case_evidences.case_evidence_id) AS evidence_count",
+		"COUNT(DISTINCT case_questions.case_question_id) AS question_count",
+		"COUNT(DISTINCT case_evidences.case_evidence_id) AS evidence_count",
 		"cases.published_at",
 		"cases.created_by",
 		"cases.created_at",

@@ -156,6 +156,66 @@ func (r *Rest) ListCaseEvidencesByAdmin(c *gin.Context) {
 	response.Success(c, http.StatusOK, "case evidences retrieved", result)
 }
 
+func (r *Rest) ListEvidenceOptionsByAdmin(c *gin.Context) {
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.CaseService.ListEvidenceOptionsByAdmin(caseID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "evidence options retrieved", result)
+}
+
+func (r *Rest) ListCaseQuestionsByAdmin(c *gin.Context) {
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.CaseService.ListCaseQuestionsByAdmin(caseID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "case questions retrieved", result)
+}
+
+func (r *Rest) GetCaseQuestionDetailByAdmin(c *gin.Context) {
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseVersionID, err := helper.ParseUUIDParam(c, "caseVersionID", "invalid case version id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseQuestionID, err := helper.ParseUUIDParam(c, "caseQuestionID", "invalid case question id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.CaseService.GetCaseQuestionDetailByAdmin(caseID, caseVersionID, caseQuestionID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "case question detail retrieved", result)
+}
+
 func (r *Rest) GetCaseLookupsByAdmin(c *gin.Context) {
 	result, err := r.service.CaseService.GetCaseLookups()
 	if err != nil {
@@ -394,6 +454,76 @@ func (r *Rest) CreatePublicAnnouncementEvidenceByAdmin(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusCreated, "public announcement evidence created", result)
+}
+
+func (r *Rest) CreateMCQQuestionByAdmin(c *gin.Context) {
+	adminUser, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseVersionID, err := helper.ParseUUIDParam(c, "caseVersionID", "invalid case version id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.AdminCreateMCQQuestionRequest
+	err = c.ShouldBindJSON(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid create mcq question request"))
+		return
+	}
+
+	result, err := r.service.CaseService.CreateMCQQuestionByAdmin(adminUser.UserID, caseID, caseVersionID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, "mcq question created", result)
+}
+
+func (r *Rest) CreateOpenEndedQuestionByAdmin(c *gin.Context) {
+	adminUser, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseVersionID, err := helper.ParseUUIDParam(c, "caseVersionID", "invalid case version id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.AdminCreateOpenEndedQuestionRequest
+	err = c.ShouldBindJSON(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid create open ended question request"))
+		return
+	}
+
+	result, err := r.service.CaseService.CreateOpenEndedQuestionByAdmin(adminUser.UserID, caseID, caseVersionID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, "open ended question created", result)
 }
 
 func (r *Rest) UpdateSocialPostEvidenceByAdmin(c *gin.Context) {

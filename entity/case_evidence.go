@@ -23,4 +23,5 @@ type CaseEvidence struct {
 	ForumThread        *CaseEvidenceForumThread        `gorm:"foreignKey:CaseEvidenceID;references:CaseEvidenceID;constraint:onDelete:CASCADE"`
 	ChatTranscript     *CaseEvidenceChatTranscript     `gorm:"foreignKey:CaseEvidenceID;references:CaseEvidenceID;constraint:onDelete:CASCADE"`
 	PublicAnnouncement *CaseEvidencePublicAnnouncement `gorm:"foreignKey:CaseEvidenceID;references:CaseEvidenceID;constraint:onDelete:CASCADE"`
+	QuestionReferences []CaseQuestionEvidenceReference `gorm:"foreignKey:CaseEvidenceID;references:CaseEvidenceID;constraint:onDelete:CASCADE"`
 }

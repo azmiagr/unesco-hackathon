@@ -1,0 +1,54 @@
+package entity
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type CaseQuestion struct {
+	CaseQuestionID uuid.UUID `json:"case_question_id" gorm:"type:varchar(36);primaryKey"`
+	CaseVersionID  uuid.UUID `json:"case_version_id" gorm:"type:varchar(36);not null;index"`
+	QuestionType   string    `json:"question_type" gorm:"type:varchar(50);not null;index"`
+	QuestionText   string    `json:"question_text" gorm:"type:text;not null"`
+	Explanation    string    `json:"explanation" gorm:"type:text;not null"`
+	ScoringWeight  int       `json:"scoring_weight" gorm:"type:int;not null;default:0"`
+	IsRequired     bool      `json:"is_required" gorm:"not null;default:true"`
+	SortOrder      int       `json:"sort_order" gorm:"type:int;not null;default:0"`
+	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt      time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+
+	MCQOptions         []CaseQuestionMCQOption         `json:"mcq_options" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
+	EvidenceReferences []CaseQuestionEvidenceReference `json:"evidence_references" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
+	OpenEndedDetail    *CaseQuestionOpenEndedDetail    `json:"open_ended_detail" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
+}
+
+type CaseQuestionMCQOption struct {
+	CaseQuestionMCQOptionID uuid.UUID `json:"case_question_mcq_option_id" gorm:"type:varchar(36);primaryKey"`
+	CaseQuestionID          uuid.UUID `json:"case_question_id" gorm:"type:varchar(36);not null;index"`
+	OptionCode              string    `json:"option_code" gorm:"type:varchar(20);not null"`
+	OptionText              string    `json:"option_text" gorm:"type:text;not null"`
+	IsCorrect               bool      `json:"is_correct" gorm:"not null;default:false"`
+	SortOrder               int       `json:"sort_order" gorm:"type:int;not null;default:0"`
+	CreatedAt               time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt               time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+type CaseQuestionEvidenceReference struct {
+	CaseQuestionEvidenceReferenceID uuid.UUID `json:"case_question_evidence_reference_id" gorm:"type:varchar(36);primaryKey"`
+	CaseQuestionID                  uuid.UUID `json:"case_question_id" gorm:"type:varchar(36);not null;index"`
+	CaseEvidenceID                  uuid.UUID `json:"case_evidence_id" gorm:"type:varchar(36);not null;index"`
+	SortOrder                       int       `json:"sort_order" gorm:"type:int;not null;default:0"`
+	CreatedAt                       time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt                       time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+type CaseQuestionOpenEndedDetail struct {
+	CaseQuestionID    uuid.UUID `json:"case_question_id" gorm:"type:varchar(36);primaryKey"`
+	ExpectedKeyPoints string    `json:"expected_key_points" gorm:"type:longtext;not null"`
+	MinimumKeywords   string    `json:"minimum_keywords" gorm:"type:json;not null"`
+	EvaluationRubric  string    `json:"evaluation_rubric" gorm:"type:longtext;not null"`
+	MaxScore          int       `json:"max_score" gorm:"type:int;not null;default:1"`
+	CreatedAt         time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt         time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
