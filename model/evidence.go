@@ -68,6 +68,10 @@ type AdminCreateSocialPostEvidenceResponse struct {
 	Evidence AdminSocialPostEvidenceResponse `json:"evidence"`
 }
 
+type AdminUpdateSocialPostEvidenceRequest = AdminCreateSocialPostEvidenceRequest
+
+type AdminUpdateSocialPostEvidenceResponse = AdminCreateSocialPostEvidenceResponse
+
 type AdminCreateArticleEvidenceRequest struct {
 	Label           string                `form:"label" binding:"required"`
 	CredibilityTags string                `form:"credibility_tags" binding:"required"`
@@ -107,6 +111,10 @@ type AdminCreateArticleEvidenceResponse struct {
 	Evidence AdminArticleEvidenceResponse `json:"evidence"`
 }
 
+type AdminUpdateArticleEvidenceRequest = AdminCreateArticleEvidenceRequest
+
+type AdminUpdateArticleEvidenceResponse = AdminCreateArticleEvidenceResponse
+
 type AdminCreateBlogEvidenceRequest struct {
 	Label           string `form:"label" binding:"required"`
 	CredibilityTags string `form:"credibility_tags" binding:"required"`
@@ -139,6 +147,10 @@ type AdminBlogEvidenceResponse struct {
 type AdminCreateBlogEvidenceResponse struct {
 	Evidence AdminBlogEvidenceResponse `json:"evidence"`
 }
+
+type AdminUpdateBlogEvidenceRequest = AdminCreateBlogEvidenceRequest
+
+type AdminUpdateBlogEvidenceResponse = AdminCreateBlogEvidenceResponse
 
 type AdminCreateForumThreadEvidenceRequest struct {
 	Label           string                              `json:"label" binding:"required"`
@@ -187,6 +199,10 @@ type AdminForumThreadEvidenceResponse struct {
 type AdminCreateForumThreadEvidenceResponse struct {
 	Evidence AdminForumThreadEvidenceResponse `json:"evidence"`
 }
+
+type AdminUpdateForumThreadEvidenceRequest = AdminCreateForumThreadEvidenceRequest
+
+type AdminUpdateForumThreadEvidenceResponse = AdminCreateForumThreadEvidenceResponse
 
 type AdminCreateChatTranscriptEvidenceRequest struct {
 	Label           string                                    `json:"label" binding:"required"`
@@ -241,6 +257,10 @@ type AdminCreateChatTranscriptEvidenceResponse struct {
 	Evidence AdminChatTranscriptEvidenceResponse `json:"evidence"`
 }
 
+type AdminUpdateChatTranscriptEvidenceRequest = AdminCreateChatTranscriptEvidenceRequest
+
+type AdminUpdateChatTranscriptEvidenceResponse = AdminCreateChatTranscriptEvidenceResponse
+
 type AdminCreatePublicAnnouncementEvidenceRequest struct {
 	Label           string   `json:"label" binding:"required"`
 	CredibilityTags []string `json:"credibility_tags" binding:"required"`
@@ -270,4 +290,12 @@ type AdminPublicAnnouncementEvidenceResponse struct {
 
 type AdminCreatePublicAnnouncementEvidenceResponse struct {
 	Evidence AdminPublicAnnouncementEvidenceResponse `json:"evidence"`
+}
+
+type AdminUpdatePublicAnnouncementEvidenceRequest = AdminCreatePublicAnnouncementEvidenceRequest
+
+type AdminUpdatePublicAnnouncementEvidenceResponse = AdminCreatePublicAnnouncementEvidenceResponse
+
+type AdminDeleteCaseEvidenceResponse struct {
+	CaseEvidenceID uuid.UUID `json:"case_evidence_id"`
 }

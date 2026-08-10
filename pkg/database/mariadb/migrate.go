@@ -33,5 +33,29 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	if err := dropLegacyCaseVersionEvidenceColumn(db); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func dropLegacyCaseVersionEvidenceColumn(db *gorm.DB) error {
+	var count int64
+	err := db.Raw(`
+		SELECT COUNT(*)
+		FROM information_schema.columns
+		WHERE table_schema = DATABASE()
+		AND table_name = ?
+		AND column_name = ?
+	`, "case_versions", "evidence").Scan(&count).Error
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		return nil
+	}
+
+	return db.Exec("ALTER TABLE case_versions DROP COLUMN evidence").Error
 }

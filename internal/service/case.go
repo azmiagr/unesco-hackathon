@@ -75,6 +75,8 @@ var allowedCaseStatuses = map[string]bool{
 
 type ICaseService interface {
 	CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCreateCaseRequest) (*model.AdminCreateCaseResponse, error)
+	UpdateCaseByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, req model.AdminUpdateCaseRequest) (*model.AdminUpdateCaseResponse, error)
+	HardDeleteCaseByAdmin(adminUserID uuid.UUID, caseID uuid.UUID) (*model.AdminDeleteCaseResponse, error)
 	ListCasesByAdmin(req model.AdminListCasesRequest) (*model.AdminListCasesResponse, error)
 	GetCaseDetailByAdmin(caseID uuid.UUID) (*model.AdminCaseDetailResponse, error)
 	ListCaseEvidencesByAdmin(caseID uuid.UUID) (*model.AdminListCaseEvidencesResponse, error)
@@ -85,6 +87,13 @@ type ICaseService interface {
 	CreateForumThreadEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateForumThreadEvidenceRequest) (*model.AdminCreateForumThreadEvidenceResponse, error)
 	CreateChatTranscriptEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateChatTranscriptEvidenceRequest) (*model.AdminCreateChatTranscriptEvidenceResponse, error)
 	CreatePublicAnnouncementEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreatePublicAnnouncementEvidenceRequest) (*model.AdminCreatePublicAnnouncementEvidenceResponse, error)
+	UpdateSocialPostEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID, req model.AdminUpdateSocialPostEvidenceRequest) (*model.AdminUpdateSocialPostEvidenceResponse, error)
+	UpdateArticleEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID, req model.AdminUpdateArticleEvidenceRequest) (*model.AdminUpdateArticleEvidenceResponse, error)
+	UpdateBlogEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID, req model.AdminUpdateBlogEvidenceRequest) (*model.AdminUpdateBlogEvidenceResponse, error)
+	UpdateForumThreadEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID, req model.AdminUpdateForumThreadEvidenceRequest) (*model.AdminUpdateForumThreadEvidenceResponse, error)
+	UpdateChatTranscriptEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID, req model.AdminUpdateChatTranscriptEvidenceRequest) (*model.AdminUpdateChatTranscriptEvidenceResponse, error)
+	UpdatePublicAnnouncementEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID, req model.AdminUpdatePublicAnnouncementEvidenceRequest) (*model.AdminUpdatePublicAnnouncementEvidenceResponse, error)
+	DeleteCaseEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID) (*model.AdminDeleteCaseEvidenceResponse, error)
 }
 
 type CaseService struct {
@@ -272,6 +281,195 @@ func (s *CaseService) CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCr
 		GenerationSource: caseEntity.GenerationSource,
 		CreatedBy:        caseEntity.CreatedBy,
 		CreatedAt:        caseEntity.CreatedAt,
+	}, nil
+}
+
+func (s *CaseService) UpdateCaseByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	req model.AdminUpdateCaseRequest,
+) (*model.AdminUpdateCaseResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	if caseID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case id")
+	}
+
+	theme := strings.ToLower(strings.TrimSpace(req.Theme))
+	themeOtherText := strings.TrimSpace(req.ThemeOtherText)
+	competencyFocus := strings.ToLower(strings.TrimSpace(req.CompetencyFocus))
+	difficultyLevel := strings.ToLower(strings.TrimSpace(req.DifficultyLevel))
+	riskLevel := strings.ToLower(strings.TrimSpace(req.RiskLevel))
+	generationSource := strings.ToLower(strings.TrimSpace(req.GenerationSource))
+	thumbnailPrompt := strings.TrimSpace(req.ThumbnailPrompt)
+	unlockRequirement := strings.TrimSpace(req.UnlockRequirement)
+	aiModel := strings.TrimSpace(req.AIModel)
+
+	title, err := helper.RequireTrimmedString(req.Title, "title is required")
+	if err != nil {
+		return nil, err
+	}
+
+	shortDescription, err := helper.RequireTrimmedString(req.ShortDescription, "short description is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if !allowedCaseThemes[theme] {
+		return nil, appErrors.BadRequest("invalid theme")
+	}
+
+	if theme == model.CaseThemeOther && themeOtherText == "" {
+		themeOtherText, err = helper.RequireTrimmedString(req.ThemeOtherText, "theme other text is required")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if theme != model.CaseThemeOther {
+		themeOtherText = ""
+	}
+
+	if !allowedCaseCompetencyFocuses[competencyFocus] {
+		return nil, appErrors.BadRequest("invalid competency focus")
+	}
+
+	if !allowedCaseDifficultyLevels[difficultyLevel] {
+		return nil, appErrors.BadRequest("invalid difficulty level")
+	}
+
+	if !allowedCaseRiskLevels[riskLevel] {
+		return nil, appErrors.BadRequest("invalid risk level")
+	}
+
+	if req.EstimatedDurationMinutes < 1 {
+		return nil, appErrors.BadRequest("estimated duration minutes must be greater than 0")
+	}
+
+	minimumLevel := max(req.MinimumLevel, 1)
+	minimumReputation := req.MinimumReputation
+	if minimumReputation < 0 {
+		return nil, appErrors.BadRequest("minimum reputation cannot be negative")
+	}
+
+	if generationSource == "" {
+		generationSource = model.CaseGenerationManual
+	}
+
+	if !allowedCaseGenerationSources[generationSource] {
+		return nil, appErrors.BadRequest("invalid generation source")
+	}
+
+	unlockRequirementValue, err := normalizeOptionalJSONString(unlockRequirement, "unlock requirement")
+	if err != nil {
+		return nil, err
+	}
+
+	thumbnailURL, err := s.uploadCaseThumbnail(req.Thumbnail)
+	if err != nil {
+		return nil, err
+	}
+
+	shouldDeleteNewThumbnail := thumbnailURL != nil
+	defer func() {
+		if shouldDeleteNewThumbnail && thumbnailURL != nil {
+			_ = supabase.DeleteFileIfPresent(s.storage, *thumbnailURL)
+		}
+	}()
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	caseEntity, err := s.caseRepo.GetCaseForUpdate(tx, caseID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case")
+	}
+
+	slug, err := s.buildUniqueSlugForUpdate(caseEntity.CaseID, title)
+	if err != nil {
+		return nil, err
+	}
+
+	oldThumbnailURL := caseEntity.ThumbnailURL
+	caseEntity.Title = title
+	caseEntity.Slug = slug
+	caseEntity.ShortDescription = shortDescription
+	caseEntity.Theme = theme
+	caseEntity.ThemeOtherText = optionalString(themeOtherText)
+	caseEntity.CompetencyFocus = competencyFocus
+	caseEntity.DifficultyLevel = difficultyLevel
+	caseEntity.RiskLevel = riskLevel
+	caseEntity.EstimatedDurationMinutes = req.EstimatedDurationMinutes
+	caseEntity.AIModel = optionalString(aiModel)
+	caseEntity.MinimumLevel = minimumLevel
+	caseEntity.MinimumReputation = minimumReputation
+	caseEntity.UnlockRequirement = unlockRequirementValue
+	caseEntity.ThumbnailPrompt = optionalString(thumbnailPrompt)
+	caseEntity.GenerationSource = generationSource
+	if thumbnailURL != nil {
+		caseEntity.ThumbnailURL = thumbnailURL
+	}
+
+	err = s.caseRepo.UpdateCase(tx, caseEntity)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update case")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	shouldDeleteNewThumbnail = false
+	if thumbnailURL != nil && oldThumbnailURL != nil && *oldThumbnailURL != *thumbnailURL {
+		_ = supabase.DeleteFileIfPresent(s.storage, *oldThumbnailURL)
+	}
+
+	return mapAdminUpdateCaseResponse(caseEntity), nil
+}
+
+func (s *CaseService) HardDeleteCaseByAdmin(adminUserID uuid.UUID, caseID uuid.UUID) (*model.AdminDeleteCaseResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	if caseID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case id")
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	caseEntity, err := s.caseRepo.GetCaseForUpdate(tx, caseID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case")
+	}
+
+	thumbnailURL := caseEntity.ThumbnailURL
+	err = s.caseRepo.HardDeleteCase(tx, caseEntity.CaseID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to delete case")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	if thumbnailURL != nil {
+		_ = supabase.DeleteFileIfPresent(s.storage, *thumbnailURL)
+	}
+
+	return &model.AdminDeleteCaseResponse{
+		CaseID: caseEntity.CaseID,
 	}, nil
 }
 
@@ -1208,6 +1406,792 @@ func (s *CaseService) CreatePublicAnnouncementEvidenceByAdmin(
 	}, nil
 }
 
+func (s *CaseService) UpdateSocialPostEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseEvidenceID uuid.UUID,
+	req model.AdminUpdateSocialPostEvidenceRequest,
+) (*model.AdminUpdateSocialPostEvidenceResponse, error) {
+	err := validateAdminEvidenceIDs(adminUserID, caseID, caseVersionID, caseEvidenceID)
+	if err != nil {
+		return nil, err
+	}
+
+	label, err := helper.RequireTrimmedString(req.Label, "label is required")
+	if err != nil {
+		return nil, err
+	}
+
+	authorName, err := helper.RequireTrimmedString(req.AuthorName, "author name is required")
+	if err != nil {
+		return nil, err
+	}
+
+	authorHandle, err := helper.RequireTrimmedString(req.AuthorHandle, "author handle is required")
+	if err != nil {
+		return nil, err
+	}
+
+	platform, err := helper.RequireTrimmedString(req.Platform, "platform is required")
+	if err != nil {
+		return nil, err
+	}
+
+	postText, err := helper.RequireTrimmedString(req.PostText, "post text is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(label) > maxEvidenceLabelLength {
+		return nil, appErrors.BadRequest("label is too long")
+	}
+
+	credibilityTags, credibilityTagsJSON, err := normalizeCredibilityTags(req.CredibilityTags)
+	if err != nil {
+		return nil, err
+	}
+
+	timestamp, err := parseEvidenceTimestamp(req.Timestamp)
+	if err != nil {
+		return nil, err
+	}
+
+	imagePrompt := strings.TrimSpace(req.ImagePrompt)
+	newImageURL, err := s.uploadEvidenceImage(req.Image)
+	if err != nil {
+		return nil, err
+	}
+
+	shouldDeleteNewImage := newImageURL != nil
+	defer func() {
+		if shouldDeleteNewImage && newImageURL != nil {
+			_ = supabase.DeleteFileIfPresent(s.storage, *newImageURL)
+		}
+	}()
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	evidence, err := s.getEditableEvidenceByAdmin(tx, caseID, caseVersionID, caseEvidenceID, model.CaseEvidenceTemplateSocialPost)
+	if err != nil {
+		return nil, err
+	}
+
+	socialPost := evidence.SocialPost
+	if socialPost == nil {
+		socialPost = &entity.CaseEvidenceSocialPost{
+			CaseEvidenceID: evidence.CaseEvidenceID,
+		}
+	}
+
+	oldImageURL := socialPost.ImageURL
+	evidence.Label = label
+	evidence.CredibilityTags = credibilityTagsJSON
+	evidence.IsCritical = req.IsCritical
+	evidence.SortOrder = req.SortOrder
+
+	socialPost.AuthorName = authorName
+	socialPost.AuthorHandle = authorHandle
+	socialPost.Platform = platform
+	socialPost.PostText = postText
+	socialPost.Timestamp = timestamp
+	socialPost.LikesCount = req.LikesCount
+	socialPost.SharesCount = req.SharesCount
+	socialPost.CommentsCount = req.CommentsCount
+	socialPost.IsVerifiedAccount = req.IsVerifiedAccount
+	socialPost.ImagePrompt = optionalString(imagePrompt)
+	if newImageURL != nil {
+		socialPost.ImageURL = newImageURL
+	}
+
+	err = s.caseEvidenceRepo.UpdateCaseEvidence(tx, evidence)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update case evidence")
+	}
+
+	err = s.caseEvidenceRepo.UpdateSocialPostEvidence(tx, socialPost)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update social post evidence")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	shouldDeleteNewImage = false
+	if newImageURL != nil && oldImageURL != nil && *oldImageURL != *newImageURL {
+		_ = supabase.DeleteFileIfPresent(s.storage, *oldImageURL)
+	}
+
+	return &model.AdminUpdateSocialPostEvidenceResponse{
+		Evidence: mapSocialPostEvidenceResponse(evidence, socialPost, credibilityTags),
+	}, nil
+}
+
+func (s *CaseService) UpdateArticleEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseEvidenceID uuid.UUID,
+	req model.AdminUpdateArticleEvidenceRequest,
+) (*model.AdminUpdateArticleEvidenceResponse, error) {
+	err := validateAdminEvidenceIDs(adminUserID, caseID, caseVersionID, caseEvidenceID)
+	if err != nil {
+		return nil, err
+	}
+
+	label, err := helper.RequireTrimmedString(req.Label, "label is required")
+	if err != nil {
+		return nil, err
+	}
+
+	headline, err := helper.RequireTrimmedString(req.Headline, "headline is required")
+	if err != nil {
+		return nil, err
+	}
+
+	sourceName, err := helper.RequireTrimmedString(req.SourceName, "source name is required")
+	if err != nil {
+		return nil, err
+	}
+
+	authorName, err := helper.RequireTrimmedString(req.AuthorName, "author name is required")
+	if err != nil {
+		return nil, err
+	}
+
+	bodyText, err := helper.RequireTrimmedString(req.BodyText, "body text is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(label) > maxEvidenceLabelLength {
+		return nil, appErrors.BadRequest("label is too long")
+	}
+
+	credibilityTags, credibilityTagsJSON, err := normalizeCredibilityTags(req.CredibilityTags)
+	if err != nil {
+		return nil, err
+	}
+
+	publishDate, err := parseEvidencePublishDate(req.PublishDate)
+	if err != nil {
+		return nil, err
+	}
+
+	urlValue, err := normalizeOptionalURL(req.URL)
+	if err != nil {
+		return nil, err
+	}
+
+	imagePrompt := strings.TrimSpace(req.ImagePrompt)
+	newImageURL, err := s.uploadEvidenceImage(req.Image)
+	if err != nil {
+		return nil, err
+	}
+
+	shouldDeleteNewImage := newImageURL != nil
+	defer func() {
+		if shouldDeleteNewImage && newImageURL != nil {
+			_ = supabase.DeleteFileIfPresent(s.storage, *newImageURL)
+		}
+	}()
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	evidence, err := s.getEditableEvidenceByAdmin(tx, caseID, caseVersionID, caseEvidenceID, model.CaseEvidenceTemplateArticle)
+	if err != nil {
+		return nil, err
+	}
+
+	article := evidence.Article
+	if article == nil {
+		article = &entity.CaseEvidenceArticle{CaseEvidenceID: evidence.CaseEvidenceID}
+	}
+
+	oldImageURL := article.ImageURL
+	evidence.Label = label
+	evidence.CredibilityTags = credibilityTagsJSON
+	evidence.IsCritical = req.IsCritical
+	evidence.SortOrder = req.SortOrder
+
+	article.Headline = headline
+	article.SourceName = sourceName
+	article.AuthorName = authorName
+	article.PublishDate = publishDate
+	article.URL = urlValue
+	article.BodyText = bodyText
+	article.ImagePrompt = optionalString(imagePrompt)
+	if newImageURL != nil {
+		article.ImageURL = newImageURL
+	}
+
+	err = s.caseEvidenceRepo.UpdateCaseEvidence(tx, evidence)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update case evidence")
+	}
+
+	err = s.caseEvidenceRepo.UpdateArticleEvidence(tx, article)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update article evidence")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	shouldDeleteNewImage = false
+	if newImageURL != nil && oldImageURL != nil && *oldImageURL != *newImageURL {
+		_ = supabase.DeleteFileIfPresent(s.storage, *oldImageURL)
+	}
+
+	return &model.AdminUpdateArticleEvidenceResponse{
+		Evidence: mapArticleEvidenceResponse(evidence, article, credibilityTags),
+	}, nil
+}
+
+func (s *CaseService) UpdateBlogEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseEvidenceID uuid.UUID,
+	req model.AdminUpdateBlogEvidenceRequest,
+) (*model.AdminUpdateBlogEvidenceResponse, error) {
+	if err := validateAdminEvidenceIDs(adminUserID, caseID, caseVersionID, caseEvidenceID); err != nil {
+		return nil, err
+	}
+
+	label, err := helper.RequireTrimmedString(req.Label, "label is required")
+	if err != nil {
+		return nil, err
+	}
+
+	title, err := helper.RequireTrimmedString(req.Title, "title is required")
+	if err != nil {
+		return nil, err
+	}
+
+	authorName, err := helper.RequireTrimmedString(req.AuthorName, "author name is required")
+	if err != nil {
+		return nil, err
+	}
+
+	blogName, err := helper.RequireTrimmedString(req.BlogName, "blog name is required")
+	if err != nil {
+		return nil, err
+	}
+
+	bodyText, err := helper.RequireTrimmedString(req.BodyText, "body text is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(label) > maxEvidenceLabelLength {
+		return nil, appErrors.BadRequest("label is too long")
+	}
+
+	credibilityTags, credibilityTagsJSON, err := normalizeCredibilityTags(req.CredibilityTags)
+	if err != nil {
+		return nil, err
+	}
+
+	publishDate, err := parseEvidencePublishDate(req.PublishDate)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	evidence, err := s.getEditableEvidenceByAdmin(tx, caseID, caseVersionID, caseEvidenceID, model.CaseEvidenceTemplateBlog)
+	if err != nil {
+		return nil, err
+	}
+
+	blog := evidence.Blog
+	if blog == nil {
+		blog = &entity.CaseEvidenceBlog{CaseEvidenceID: evidence.CaseEvidenceID}
+	}
+
+	evidence.Label = label
+	evidence.CredibilityTags = credibilityTagsJSON
+	evidence.IsCritical = req.IsCritical
+	evidence.SortOrder = req.SortOrder
+
+	blog.Title = title
+	blog.AuthorName = authorName
+	blog.BlogName = blogName
+	blog.PublishDate = publishDate
+	blog.BodyText = bodyText
+
+	err = s.caseEvidenceRepo.UpdateCaseEvidence(tx, evidence)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update case evidence")
+	}
+
+	err = s.caseEvidenceRepo.UpdateBlogEvidence(tx, blog)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update blog evidence")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminUpdateBlogEvidenceResponse{
+		Evidence: mapBlogEvidenceResponse(evidence, blog, credibilityTags),
+	}, nil
+}
+
+func (s *CaseService) UpdateForumThreadEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseEvidenceID uuid.UUID,
+	req model.AdminUpdateForumThreadEvidenceRequest,
+) (*model.AdminUpdateForumThreadEvidenceResponse, error) {
+	err := validateAdminEvidenceIDs(adminUserID, caseID, caseVersionID, caseEvidenceID)
+	if err != nil {
+		return nil, err
+	}
+
+	label, err := helper.RequireTrimmedString(req.Label, "label is required")
+	if err != nil {
+		return nil, err
+	}
+
+	threadTitle, err := helper.RequireTrimmedString(req.ThreadTitle, "thread title is required")
+	if err != nil {
+		return nil, err
+	}
+
+	forumName, err := helper.RequireTrimmedString(req.ForumName, "forum name is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(label) > maxEvidenceLabelLength {
+		return nil, appErrors.BadRequest("label is too long")
+	}
+
+	credibilityTags, credibilityTagsJSON, err := normalizeCredibilityTagItems(req.CredibilityTags)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(req.Posts) == 0 {
+		return nil, appErrors.BadRequest("posts are required")
+	}
+
+	posts := make([]entity.CaseEvidenceForumThreadPost, 0, len(req.Posts))
+	for i, postReq := range req.Posts {
+		authorName, err := helper.RequireTrimmedString(postReq.AuthorName, "post author name is required")
+		if err != nil {
+			return nil, err
+		}
+
+		text, err := helper.RequireTrimmedString(postReq.Text, "post text is required")
+		if err != nil {
+			return nil, err
+		}
+
+		timestamp, err := parseEvidenceTimestamp(postReq.Timestamp)
+		if err != nil {
+			return nil, err
+		}
+
+		if postReq.UpvoteCount < 0 {
+			return nil, appErrors.BadRequest("upvote count cannot be negative")
+		}
+
+		posts = append(posts, entity.CaseEvidenceForumThreadPost{
+			CaseEvidenceForumThreadPostID: uuid.New(),
+			CaseEvidenceID:                caseEvidenceID,
+			AuthorName:                    authorName,
+			Text:                          text,
+			Timestamp:                     timestamp,
+			UpvoteCount:                   postReq.UpvoteCount,
+			SortOrder:                     i + 1,
+		})
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	evidence, err := s.getEditableEvidenceByAdmin(tx, caseID, caseVersionID, caseEvidenceID, model.CaseEvidenceTemplateForumThread)
+	if err != nil {
+		return nil, err
+	}
+
+	forumThread := evidence.ForumThread
+	if forumThread == nil {
+		forumThread = &entity.CaseEvidenceForumThread{CaseEvidenceID: evidence.CaseEvidenceID}
+	}
+
+	evidence.Label = label
+	evidence.CredibilityTags = credibilityTagsJSON
+	evidence.IsCritical = req.IsCritical
+	evidence.SortOrder = req.SortOrder
+
+	forumThread.ThreadTitle = threadTitle
+	forumThread.ForumName = forumName
+
+	err = s.caseEvidenceRepo.UpdateCaseEvidence(tx, evidence)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update case evidence")
+	}
+
+	err = s.caseEvidenceRepo.UpdateForumThreadEvidence(tx, forumThread)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update forum thread evidence")
+	}
+
+	err = s.caseEvidenceRepo.ReplaceForumThreadPosts(tx, evidence.CaseEvidenceID, posts)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to replace forum thread posts")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminUpdateForumThreadEvidenceResponse{
+		Evidence: mapForumThreadEvidenceResponse(evidence, forumThread, posts, credibilityTags),
+	}, nil
+}
+
+func (s *CaseService) UpdateChatTranscriptEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseEvidenceID uuid.UUID,
+	req model.AdminUpdateChatTranscriptEvidenceRequest,
+) (*model.AdminUpdateChatTranscriptEvidenceResponse, error) {
+	err := validateAdminEvidenceIDs(adminUserID, caseID, caseVersionID, caseEvidenceID)
+	if err != nil {
+		return nil, err
+	}
+
+	label, err := helper.RequireTrimmedString(req.Label, "label is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(label) > maxEvidenceLabelLength {
+		return nil, appErrors.BadRequest("label is too long")
+	}
+
+	credibilityTags, credibilityTagsJSON, err := normalizeCredibilityTagItems(req.CredibilityTags)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(req.Participants) == 0 {
+		return nil, appErrors.BadRequest("participants are required")
+	}
+
+	if len(req.Messages) == 0 {
+		return nil, appErrors.BadRequest("messages are required")
+	}
+
+	participantEntities := make([]entity.CaseEvidenceChatTranscriptParticipant, 0, len(req.Participants))
+	participantSet := map[string]bool{}
+	for i, participant := range req.Participants {
+		name, err := helper.RequireTrimmedString(participant, "participant name is required")
+		if err != nil {
+			return nil, err
+		}
+
+		if participantSet[name] {
+			return nil, appErrors.BadRequest("participants cannot contain duplicates")
+		}
+
+		participantSet[name] = true
+		participantEntities = append(participantEntities, entity.CaseEvidenceChatTranscriptParticipant{
+			CaseEvidenceChatTranscriptParticipantID: uuid.New(),
+			CaseEvidenceID:                          caseEvidenceID,
+			Name:                                    name,
+			SortOrder:                               i + 1,
+		})
+	}
+
+	messageEntities := make([]entity.CaseEvidenceChatTranscriptMessage, 0, len(req.Messages))
+	for i, messageReq := range req.Messages {
+		sender, err := helper.RequireTrimmedString(messageReq.Sender, "message sender is required")
+		if err != nil {
+			return nil, err
+		}
+
+		if !participantSet[sender] {
+			return nil, appErrors.BadRequest("message sender must be one of participants")
+		}
+
+		text, err := helper.RequireTrimmedString(messageReq.Text, "message text is required")
+		if err != nil {
+			return nil, err
+		}
+
+		timestamp, err := parseEvidenceTimestamp(messageReq.Timestamp)
+		if err != nil {
+			return nil, err
+		}
+
+		messageEntities = append(messageEntities, entity.CaseEvidenceChatTranscriptMessage{
+			CaseEvidenceChatTranscriptMessageID: uuid.New(),
+			CaseEvidenceID:                      caseEvidenceID,
+			Sender:                              sender,
+			Text:                                text,
+			Timestamp:                           timestamp,
+			SortOrder:                           i + 1,
+		})
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	evidence, err := s.getEditableEvidenceByAdmin(tx, caseID, caseVersionID, caseEvidenceID, model.CaseEvidenceTemplateChatTranscript)
+	if err != nil {
+		return nil, err
+	}
+
+	chatTranscript := evidence.ChatTranscript
+	if chatTranscript == nil {
+		chatTranscript = &entity.CaseEvidenceChatTranscript{CaseEvidenceID: evidence.CaseEvidenceID}
+	}
+
+	evidence.Label = label
+	evidence.CredibilityTags = credibilityTagsJSON
+	evidence.IsCritical = req.IsCritical
+	evidence.SortOrder = req.SortOrder
+
+	err = s.caseEvidenceRepo.UpdateCaseEvidence(tx, evidence)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update case evidence")
+	}
+
+	err = s.caseEvidenceRepo.UpdateChatTranscriptEvidence(tx, chatTranscript)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update chat transcript evidence")
+	}
+
+	err = s.caseEvidenceRepo.ReplaceChatTranscriptParticipants(tx, evidence.CaseEvidenceID, participantEntities)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to replace chat transcript participants")
+	}
+
+	err = s.caseEvidenceRepo.ReplaceChatTranscriptMessages(tx, evidence.CaseEvidenceID, messageEntities)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to replace chat transcript messages")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminUpdateChatTranscriptEvidenceResponse{
+		Evidence: mapChatTranscriptEvidenceResponse(evidence, participantEntities, messageEntities, credibilityTags),
+	}, nil
+}
+
+func (s *CaseService) UpdatePublicAnnouncementEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseEvidenceID uuid.UUID,
+	req model.AdminUpdatePublicAnnouncementEvidenceRequest,
+) (*model.AdminUpdatePublicAnnouncementEvidenceResponse, error) {
+	err := validateAdminEvidenceIDs(adminUserID, caseID, caseVersionID, caseEvidenceID)
+	if err != nil {
+		return nil, err
+	}
+
+	label, err := helper.RequireTrimmedString(req.Label, "label is required")
+	if err != nil {
+		return nil, err
+	}
+
+	issuingBody, err := helper.RequireTrimmedString(req.IssuingBody, "issuing body is required")
+	if err != nil {
+		return nil, err
+	}
+
+	title, err := helper.RequireTrimmedString(req.Title, "title is required")
+	if err != nil {
+		return nil, err
+	}
+
+	bodyText, err := helper.RequireTrimmedString(req.BodyText, "body text is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(label) > maxEvidenceLabelLength {
+		return nil, appErrors.BadRequest("label is too long")
+	}
+
+	credibilityTags, credibilityTagsJSON, err := normalizeCredibilityTagItems(req.CredibilityTags)
+	if err != nil {
+		return nil, err
+	}
+
+	announcementDate, err := parseEvidencePublishDate(req.Date)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	evidence, err := s.getEditableEvidenceByAdmin(tx, caseID, caseVersionID, caseEvidenceID, model.CaseEvidenceTemplatePublicAnnouncement)
+	if err != nil {
+		return nil, err
+	}
+
+	publicAnnouncement := evidence.PublicAnnouncement
+	if publicAnnouncement == nil {
+		publicAnnouncement = &entity.CaseEvidencePublicAnnouncement{CaseEvidenceID: evidence.CaseEvidenceID}
+	}
+
+	evidence.Label = label
+	evidence.CredibilityTags = credibilityTagsJSON
+	evidence.IsCritical = req.IsCritical
+	evidence.SortOrder = req.SortOrder
+
+	publicAnnouncement.IssuingBody = issuingBody
+	publicAnnouncement.Title = title
+	publicAnnouncement.Date = announcementDate
+	publicAnnouncement.BodyText = bodyText
+
+	err = s.caseEvidenceRepo.UpdateCaseEvidence(tx, evidence)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update case evidence")
+	}
+
+	err = s.caseEvidenceRepo.UpdatePublicAnnouncementEvidence(tx, publicAnnouncement)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update public announcement evidence")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminUpdatePublicAnnouncementEvidenceResponse{
+		Evidence: mapPublicAnnouncementEvidenceResponse(evidence, publicAnnouncement, credibilityTags),
+	}, nil
+}
+
+func (s *CaseService) DeleteCaseEvidenceByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseEvidenceID uuid.UUID,
+) (*model.AdminDeleteCaseEvidenceResponse, error) {
+	if err := validateAdminEvidenceIDs(adminUserID, caseID, caseVersionID, caseEvidenceID); err != nil {
+		return nil, err
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	evidence, err := s.getEditableEvidenceByAdmin(tx, caseID, caseVersionID, caseEvidenceID, "")
+	if err != nil {
+		return nil, err
+	}
+
+	var imageURL *string
+	if evidence.SocialPost != nil {
+		imageURL = evidence.SocialPost.ImageURL
+	}
+	if evidence.Article != nil {
+		imageURL = evidence.Article.ImageURL
+	}
+
+	err = s.caseEvidenceRepo.DeleteCaseEvidence(tx, evidence.CaseEvidenceID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to delete case evidence")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	if imageURL != nil {
+		_ = supabase.DeleteFileIfPresent(s.storage, *imageURL)
+	}
+
+	return &model.AdminDeleteCaseEvidenceResponse{
+		CaseEvidenceID: evidence.CaseEvidenceID,
+	}, nil
+}
+
+func validateAdminEvidenceIDs(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID) error {
+	if adminUserID == uuid.Nil {
+		return appErrors.Unauthorized("unauthorized")
+	}
+
+	if caseID == uuid.Nil {
+		return appErrors.BadRequest("invalid case id")
+	}
+
+	if caseVersionID == uuid.Nil {
+		return appErrors.BadRequest("invalid case version id")
+	}
+
+	if caseEvidenceID == uuid.Nil {
+		return appErrors.BadRequest("invalid case evidence id")
+	}
+
+	return nil
+}
+
+func (s *CaseService) getEditableEvidenceByAdmin(
+	tx *gorm.DB,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseEvidenceID uuid.UUID,
+	templateType string,
+) (*entity.CaseEvidence, error) {
+	caseVersion, err := s.caseVersionRepo.GetCaseVersionForUpdate(tx, caseVersionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case version not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case version")
+	}
+
+	if caseVersion.CaseID != caseID {
+		return nil, appErrors.NotFound("case version not found")
+	}
+
+	if caseVersion.Status != model.CaseStatusDraft {
+		return nil, appErrors.Conflict("case version is not editable")
+	}
+
+	evidence, err := s.caseEvidenceRepo.GetCaseEvidence(tx, model.GetCaseEvidenceParam{
+		CaseEvidenceID: caseEvidenceID,
+		CaseVersionID:  caseVersionID,
+		TemplateType:   templateType,
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case evidence not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case evidence")
+	}
+
+	return evidence, nil
+}
+
 func parseEvidencePublishDate(raw string) (time.Time, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -1580,6 +2564,56 @@ func (s *CaseService) buildUniqueSlug(caseID uuid.UUID, title string) (string, e
 	}
 
 	return slug, nil
+}
+
+func (s *CaseService) buildUniqueSlugForUpdate(caseID uuid.UUID, title string) (string, error) {
+	baseSlug := slugify(title)
+	if baseSlug == "" {
+		baseSlug = "case"
+	}
+
+	existingCase, err := s.caseRepo.GetCase(s.db, model.GetCaseParam{
+		Slug: baseSlug,
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return baseSlug, nil
+		}
+		return "", appErrors.InternalServer("failed to check case slug")
+	}
+
+	if existingCase.CaseID == caseID {
+		return baseSlug, nil
+	}
+
+	return fmt.Sprintf("%s-%s", baseSlug, caseID.String()[:8]), nil
+}
+
+func mapAdminUpdateCaseResponse(caseEntity *entity.Case) *model.AdminUpdateCaseResponse {
+	return &model.AdminUpdateCaseResponse{
+		CaseID:                   caseEntity.CaseID,
+		Title:                    caseEntity.Title,
+		Slug:                     caseEntity.Slug,
+		ShortDescription:         caseEntity.ShortDescription,
+		Theme:                    caseEntity.Theme,
+		ThemeOtherText:           caseEntity.ThemeOtherText,
+		CompetencyFocus:          caseEntity.CompetencyFocus,
+		DifficultyLevel:          caseEntity.DifficultyLevel,
+		RiskLevel:                caseEntity.RiskLevel,
+		EstimatedDurationMinutes: caseEntity.EstimatedDurationMinutes,
+		AIModel:                  caseEntity.AIModel,
+		MinimumLevel:             caseEntity.MinimumLevel,
+		MinimumReputation:        caseEntity.MinimumReputation,
+		UnlockRequirement:        caseEntity.UnlockRequirement,
+		ThumbnailURL:             caseEntity.ThumbnailURL,
+		ThumbnailPrompt:          caseEntity.ThumbnailPrompt,
+		GenerationSource:         caseEntity.GenerationSource,
+		Status:                   caseEntity.Status,
+		PublishedAt:              caseEntity.PublishedAt,
+		CreatedBy:                caseEntity.CreatedBy,
+		CreatedAt:                caseEntity.CreatedAt,
+		UpdatedAt:                caseEntity.UpdatedAt,
+	}
 }
 
 func normalizeOptionalJSONString(raw string, fieldName string) (*string, error) {

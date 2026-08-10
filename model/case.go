@@ -119,6 +119,37 @@ type AdminCreateCaseResponse struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
+type AdminUpdateCaseRequest = AdminCreateCaseRequest
+
+type AdminUpdateCaseResponse struct {
+	CaseID                   uuid.UUID  `json:"case_id"`
+	Title                    string     `json:"title"`
+	Slug                     string     `json:"slug"`
+	ShortDescription         string     `json:"short_description"`
+	Theme                    string     `json:"theme"`
+	ThemeOtherText           *string    `json:"theme_other_text"`
+	CompetencyFocus          string     `json:"competency_focus"`
+	DifficultyLevel          string     `json:"difficulty_level"`
+	RiskLevel                string     `json:"risk_level"`
+	EstimatedDurationMinutes int        `json:"estimated_duration_minutes"`
+	AIModel                  *string    `json:"ai_model"`
+	MinimumLevel             int        `json:"minimum_level"`
+	MinimumReputation        float64    `json:"minimum_reputation"`
+	UnlockRequirement        *string    `json:"unlock_requirement"`
+	ThumbnailURL             *string    `json:"thumbnail_url"`
+	ThumbnailPrompt          *string    `json:"thumbnail_prompt"`
+	GenerationSource         string     `json:"generation_source"`
+	Status                   string     `json:"status"`
+	PublishedAt              *time.Time `json:"published_at"`
+	CreatedBy                uuid.UUID  `json:"created_by"`
+	CreatedAt                time.Time  `json:"created_at"`
+	UpdatedAt                time.Time  `json:"updated_at"`
+}
+
+type AdminDeleteCaseResponse struct {
+	CaseID uuid.UUID `json:"case_id"`
+}
+
 type AdminListCasesRequest struct {
 	Search           string `form:"search"`
 	Status           string `form:"status"`

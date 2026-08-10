@@ -16,6 +16,7 @@ type ICaseRepository interface {
 	ListAdminCases(tx *gorm.DB, param model.AdminListCasesParam) ([]model.AdminCaseListRow, int64, error)
 	GetAdminCaseDetail(tx *gorm.DB, caseID uuid.UUID) (*model.AdminCaseListRow, error)
 	UpdateCase(tx *gorm.DB, caseEntity *entity.Case) error
+	HardDeleteCase(tx *gorm.DB, caseID uuid.UUID) error
 	CaseExists(tx *gorm.DB, param model.GetCaseParam) (bool, error)
 }
 
@@ -156,6 +157,17 @@ func (r *CaseRepository) GetAdminCaseDetail(tx *gorm.DB, caseID uuid.UUID) (*mod
 
 func (r *CaseRepository) UpdateCase(tx *gorm.DB, caseEntity *entity.Case) error {
 	err := tx.Debug().Save(caseEntity).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *CaseRepository) HardDeleteCase(tx *gorm.DB, caseID uuid.UUID) error {
+	err := tx.Debug().
+		Unscoped().
+		Where("case_id = ?", caseID).
+		Delete(&entity.Case{}).Error
 	if err != nil {
 		return err
 	}

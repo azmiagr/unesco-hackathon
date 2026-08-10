@@ -53,12 +53,21 @@ func (r *Rest) MountEndpoint() {
 	cases.GET("/:caseID/evidences", r.ListCaseEvidencesByAdmin)
 	cases.GET("/:caseID", r.GetCaseDetailByAdmin)
 	cases.POST("", r.CreateCaseByAdmin)
+	cases.PATCH("/:caseID", r.UpdateCaseByAdmin)
+	cases.DELETE("/:caseID", r.HardDeleteCaseByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/evidences/social-post", r.CreateSocialPostEvidenceByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/evidences/article", r.CreateArticleEvidenceByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/evidences/blog", r.CreateBlogEvidenceByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/evidences/forum-thread", r.CreateForumThreadEvidenceByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/evidences/chat-transcript", r.CreateChatTranscriptEvidenceByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/evidences/public-announcement", r.CreatePublicAnnouncementEvidenceByAdmin)
+	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/social-post", r.UpdateSocialPostEvidenceByAdmin)
+	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/article", r.UpdateArticleEvidenceByAdmin)
+	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/blog", r.UpdateBlogEvidenceByAdmin)
+	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/forum-thread", r.UpdateForumThreadEvidenceByAdmin)
+	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/chat-transcript", r.UpdateChatTranscriptEvidenceByAdmin)
+	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/public-announcement", r.UpdatePublicAnnouncementEvidenceByAdmin)
+	cases.DELETE("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID", r.DeleteCaseEvidenceByAdmin)
 }
 
 func (r *Rest) Run() {
