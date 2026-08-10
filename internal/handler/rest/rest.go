@@ -53,6 +53,7 @@ func (r *Rest) MountEndpoint() {
 	cases.GET("/:caseID/evidences", r.ListCaseEvidencesByAdmin)
 	cases.GET("/:caseID/evidence-options", r.ListEvidenceOptionsByAdmin)
 	cases.GET("/:caseID/questions", r.ListCaseQuestionsByAdmin)
+	cases.GET("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID", r.GetCaseEvidenceDetailByAdmin)
 	cases.GET("/:caseID/versions/:caseVersionID/questions/:caseQuestionID", r.GetCaseQuestionDetailByAdmin)
 	cases.GET("/:caseID", r.GetCaseDetailByAdmin)
 	cases.POST("", r.CreateCaseByAdmin)

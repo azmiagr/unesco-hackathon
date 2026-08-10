@@ -296,6 +296,16 @@ type AdminUpdatePublicAnnouncementEvidenceRequest = AdminCreatePublicAnnouncemen
 
 type AdminUpdatePublicAnnouncementEvidenceResponse = AdminCreatePublicAnnouncementEvidenceResponse
 
+type AdminEvidenceDetailResponse struct {
+	TemplateType       string                                   `json:"template_type"`
+	SocialPost         *AdminSocialPostEvidenceResponse         `json:"social_post,omitempty"`
+	Article            *AdminArticleEvidenceResponse            `json:"article,omitempty"`
+	Blog               *AdminBlogEvidenceResponse               `json:"blog,omitempty"`
+	ForumThread        *AdminForumThreadEvidenceResponse        `json:"forum_thread,omitempty"`
+	ChatTranscript     *AdminChatTranscriptEvidenceResponse     `json:"chat_transcript,omitempty"`
+	PublicAnnouncement *AdminPublicAnnouncementEvidenceResponse `json:"public_announcement,omitempty"`
+}
+
 type AdminDeleteCaseEvidenceResponse struct {
 	CaseEvidenceID uuid.UUID `json:"case_evidence_id"`
 }

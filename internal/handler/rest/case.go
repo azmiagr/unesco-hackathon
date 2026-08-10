@@ -172,6 +172,34 @@ func (r *Rest) ListEvidenceOptionsByAdmin(c *gin.Context) {
 	response.Success(c, http.StatusOK, "evidence options retrieved", result)
 }
 
+func (r *Rest) GetCaseEvidenceDetailByAdmin(c *gin.Context) {
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseVersionID, err := helper.ParseUUIDParam(c, "caseVersionID", "invalid case version id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseEvidenceID, err := helper.ParseUUIDParam(c, "caseEvidenceID", "invalid case evidence id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.CaseService.GetCaseEvidenceDetailByAdmin(caseID, caseVersionID, caseEvidenceID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "case evidence detail retrieved", result)
+}
+
 func (r *Rest) ListCaseQuestionsByAdmin(c *gin.Context) {
 	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
 	if err != nil {
