@@ -36,6 +36,8 @@ func Migrate(db *gorm.DB) error {
 		&entity.AdminLoginOtpSession{},
 		&entity.OtpCode{},
 		&entity.Avatar{},
+		&entity.ItemCategory{},
+		&entity.Item{},
 		&entity.UserProfile{},
 		&entity.RegistrationSession{},
 	)

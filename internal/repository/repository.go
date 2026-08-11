@@ -15,6 +15,8 @@ type Repository struct {
 	CaseQuestionRepository        ICaseQuestionRepository
 	CaseChatbotConfigRepository   ICaseChatbotConfigRepository
 	CaseScoringOutcomeRepository  ICaseScoringOutcomeRepository
+	ItemCategoryRepository        IItemCategoryRepository
+	ItemRepository                IItemRepository
 }
 
 func NewRepository(db *gorm.DB) *Repository {
@@ -31,5 +33,7 @@ func NewRepository(db *gorm.DB) *Repository {
 		CaseQuestionRepository:        NewCaseQuestionRepository(db),
 		CaseChatbotConfigRepository:   NewCaseChatbotConfigRepository(db),
 		CaseScoringOutcomeRepository:  NewCaseScoringOutcomeRepository(db),
+		ItemCategoryRepository:        NewItemCategoryRepository(db),
+		ItemRepository:                NewItemRepository(db),
 	}
 }
