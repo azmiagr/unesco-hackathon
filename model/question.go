@@ -110,6 +110,45 @@ type AdminCreateOpenEndedQuestionResponse struct {
 	Question AdminOpenEndedQuestionResponse `json:"question"`
 }
 
+type AdminCreateConfidenceSliderQuestionRequest struct {
+	QuestionText             string      `json:"question_text" binding:"required"`
+	ScoringWeight            int         `json:"scoring_weight" binding:"required"`
+	RelatedEvidenceIDs       []uuid.UUID `json:"related_evidence_ids" binding:"required"`
+	MinValue                 int         `json:"min_value"`
+	MaxValue                 int         `json:"max_value" binding:"required"`
+	SnapInterval             int         `json:"snap_interval" binding:"required"`
+	DefaultValue             int         `json:"default_value"`
+	LabelLow                 string      `json:"label_low" binding:"required"`
+	LabelHigh                string      `json:"label_high" binding:"required"`
+	ShowWarningOnLargeChange bool        `json:"show_warning_on_large_change"`
+	IsRequired               bool        `json:"is_required"`
+	SortOrder                int         `json:"sort_order"`
+}
+
+type AdminConfidenceSliderQuestionResponse struct {
+	CaseQuestionID           uuid.UUID                                `json:"case_question_id"`
+	CaseVersionID            uuid.UUID                                `json:"case_version_id"`
+	QuestionType             string                                   `json:"question_type"`
+	QuestionText             string                                   `json:"question_text"`
+	ScoringWeight            int                                      `json:"scoring_weight"`
+	IsRequired               bool                                     `json:"is_required"`
+	SortOrder                int                                      `json:"sort_order"`
+	MinValue                 int                                      `json:"min_value"`
+	MaxValue                 int                                      `json:"max_value"`
+	SnapInterval             int                                      `json:"snap_interval"`
+	DefaultValue             int                                      `json:"default_value"`
+	LabelLow                 string                                   `json:"label_low"`
+	LabelHigh                string                                   `json:"label_high"`
+	ShowWarningOnLargeChange bool                                     `json:"show_warning_on_large_change"`
+	EvidenceReferences       []AdminQuestionEvidenceReferenceResponse `json:"evidence_references"`
+	CreatedAt                time.Time                                `json:"created_at"`
+	UpdatedAt                time.Time                                `json:"updated_at"`
+}
+
+type AdminCreateConfidenceSliderQuestionResponse struct {
+	Question AdminConfidenceSliderQuestionResponse `json:"question"`
+}
+
 type AdminEvidenceOptionResponse struct {
 	CaseEvidenceID uuid.UUID `json:"case_evidence_id"`
 	Code           string    `json:"code"`
@@ -155,7 +194,8 @@ type AdminListCaseQuestionsResponse struct {
 }
 
 type AdminQuestionDetailResponse struct {
-	QuestionType string                          `json:"question_type"`
-	MCQ          *AdminMCQQuestionResponse       `json:"mcq,omitempty"`
-	OpenEnded    *AdminOpenEndedQuestionResponse `json:"open_ended,omitempty"`
+	QuestionType     string                                 `json:"question_type"`
+	MCQ              *AdminMCQQuestionResponse              `json:"mcq,omitempty"`
+	OpenEnded        *AdminOpenEndedQuestionResponse        `json:"open_ended,omitempty"`
+	ConfidenceSlider *AdminConfidenceSliderQuestionResponse `json:"confidence_slider,omitempty"`
 }

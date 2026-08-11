@@ -48,8 +48,9 @@ const (
 	CaseEvidenceTemplateChatTranscript     = "chat_transcript"
 	CaseEvidenceTemplatePublicAnnouncement = "public_announcement"
 
-	CaseQuestionTypeMCQ       = "mcq"
-	CaseQuestionTypeOpenEnded = "open_ended"
+	CaseQuestionTypeMCQ              = "mcq"
+	CaseQuestionTypeOpenEnded        = "open_ended"
+	CaseQuestionTypeConfidenceSlider = "confidence_slider"
 )
 
 type GetCaseParam struct {

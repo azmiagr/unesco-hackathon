@@ -140,6 +140,13 @@ func (s *CaseService) GetCaseQuestionDetailByAdmin(
 
 		openEnded := mapOpenEndedQuestionResponse(question, question.OpenEndedDetail, minimumKeywords, question.EvidenceReferences)
 		result.OpenEnded = &openEnded
+	case model.CaseQuestionTypeConfidenceSlider:
+		if question.ConfidenceSliderDetail == nil {
+			return nil, appErrors.InternalServer("confidence slider question detail not found")
+		}
+
+		confidenceSlider := mapConfidenceSliderQuestionResponse(question, question.ConfidenceSliderDetail, question.EvidenceReferences)
+		result.ConfidenceSlider = &confidenceSlider
 	default:
 		return nil, appErrors.BadRequest("unsupported question type")
 	}
@@ -436,6 +443,159 @@ func (s *CaseService) CreateOpenEndedQuestionByAdmin(
 	}, nil
 }
 
+func (s *CaseService) CreateConfidenceSliderQuestionByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	req model.AdminCreateConfidenceSliderQuestionRequest,
+) (*model.AdminCreateConfidenceSliderQuestionResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+	if caseID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case id")
+	}
+	if caseVersionID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case version id")
+	}
+
+	questionText, err := helper.RequireTrimmedString(req.QuestionText, "question text is required")
+	if err != nil {
+		return nil, err
+	}
+
+	labelLow, err := helper.RequireTrimmedString(req.LabelLow, "label low is required")
+	if err != nil {
+		return nil, err
+	}
+
+	labelHigh, err := helper.RequireTrimmedString(req.LabelHigh, "label high is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(labelLow) > 150 {
+		return nil, appErrors.BadRequest("label low is too long")
+	}
+
+	if len(labelHigh) > 150 {
+		return nil, appErrors.BadRequest("label high is too long")
+	}
+
+	if req.ScoringWeight < 0 || req.ScoringWeight > 100 {
+		return nil, appErrors.BadRequest("scoring weight must be between 0 and 100")
+	}
+
+	if len(req.RelatedEvidenceIDs) == 0 {
+		return nil, appErrors.BadRequest("related evidence ids are required")
+	}
+
+	if req.MinValue >= req.MaxValue {
+		return nil, appErrors.BadRequest("min value must be less than max value")
+	}
+
+	if req.SnapInterval < 1 {
+		return nil, appErrors.BadRequest("snap interval must be greater than 0")
+	}
+
+	if req.DefaultValue < req.MinValue || req.DefaultValue > req.MaxValue {
+		return nil, appErrors.BadRequest("default value must be between min value and max value")
+	}
+
+	if (req.DefaultValue-req.MinValue)%req.SnapInterval != 0 {
+		return nil, appErrors.BadRequest("default value must align with snap interval")
+	}
+
+	questionID := uuid.New()
+	evidenceReferences := make([]entity.CaseQuestionEvidenceReference, 0, len(req.RelatedEvidenceIDs))
+	seenEvidenceIDs := map[uuid.UUID]bool{}
+
+	for i, evidenceID := range req.RelatedEvidenceIDs {
+		if evidenceID == uuid.Nil {
+			return nil, appErrors.BadRequest("invalid related evidence id")
+		}
+		if seenEvidenceIDs[evidenceID] {
+			return nil, appErrors.BadRequest("related evidence ids cannot contain duplicates")
+		}
+
+		seenEvidenceIDs[evidenceID] = true
+		evidenceReferences = append(evidenceReferences, entity.CaseQuestionEvidenceReference{
+			CaseQuestionEvidenceReferenceID: uuid.New(),
+			CaseQuestionID:                  questionID,
+			CaseEvidenceID:                  evidenceID,
+			SortOrder:                       i + 1,
+		})
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	caseVersion, err := s.caseVersionRepo.GetCaseVersionForUpdate(tx, caseVersionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case version not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case version")
+	}
+
+	if caseVersion.CaseID != caseID {
+		return nil, appErrors.NotFound("case version not found")
+	}
+
+	if caseVersion.Status != model.CaseStatusDraft {
+		return nil, appErrors.Conflict("case version is not editable")
+	}
+
+	for evidenceID := range seenEvidenceIDs {
+		_, err := s.caseEvidenceRepo.GetCaseEvidence(tx, model.GetCaseEvidenceParam{
+			CaseEvidenceID: evidenceID,
+			CaseVersionID:  caseVersionID,
+		})
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, appErrors.BadRequest("related evidence must belong to case version")
+			}
+			return nil, appErrors.InternalServer("failed to validate related evidence")
+		}
+	}
+
+	question := &entity.CaseQuestion{
+		CaseQuestionID: questionID,
+		CaseVersionID:  caseVersion.CaseVersionID,
+		QuestionType:   model.CaseQuestionTypeConfidenceSlider,
+		QuestionText:   questionText,
+		Explanation:    "",
+		ScoringWeight:  req.ScoringWeight,
+		IsRequired:     req.IsRequired,
+		SortOrder:      req.SortOrder,
+	}
+
+	confidenceSliderDetail := &entity.CaseQuestionConfidenceSliderDetail{
+		CaseQuestionID:           question.CaseQuestionID,
+		MinValue:                 req.MinValue,
+		MaxValue:                 req.MaxValue,
+		SnapInterval:             req.SnapInterval,
+		DefaultValue:             req.DefaultValue,
+		LabelLow:                 labelLow,
+		LabelHigh:                labelHigh,
+		ShowWarningOnLargeChange: req.ShowWarningOnLargeChange,
+	}
+
+	err = s.caseQuestionRepo.CreateConfidenceSliderQuestion(tx, question, confidenceSliderDetail, evidenceReferences)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to create confidence slider question")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminCreateConfidenceSliderQuestionResponse{
+		Question: mapConfidenceSliderQuestionResponse(question, confidenceSliderDetail, evidenceReferences),
+	}, nil
+}
+
 func mapMCQQuestionResponse(
 	question *entity.CaseQuestion,
 	options []entity.CaseQuestionMCQOption,
@@ -516,6 +676,44 @@ func mapOpenEndedQuestionResponse(
 		EvidenceReferences: evidenceReferenceResponses,
 		CreatedAt:          question.CreatedAt,
 		UpdatedAt:          question.UpdatedAt,
+	}
+}
+
+func mapConfidenceSliderQuestionResponse(
+	question *entity.CaseQuestion,
+	confidenceSliderDetail *entity.CaseQuestionConfidenceSliderDetail,
+	evidenceReferences []entity.CaseQuestionEvidenceReference,
+) model.AdminConfidenceSliderQuestionResponse {
+	evidenceReferenceResponses := make([]model.AdminQuestionEvidenceReferenceResponse, 0, len(evidenceReferences))
+	for _, reference := range evidenceReferences {
+		evidenceReferenceResponses = append(evidenceReferenceResponses, model.AdminQuestionEvidenceReferenceResponse{
+			CaseQuestionEvidenceReferenceID: reference.CaseQuestionEvidenceReferenceID,
+			CaseQuestionID:                  reference.CaseQuestionID,
+			CaseEvidenceID:                  reference.CaseEvidenceID,
+			SortOrder:                       reference.SortOrder,
+			CreatedAt:                       reference.CreatedAt,
+			UpdatedAt:                       reference.UpdatedAt,
+		})
+	}
+
+	return model.AdminConfidenceSliderQuestionResponse{
+		CaseQuestionID:           question.CaseQuestionID,
+		CaseVersionID:            question.CaseVersionID,
+		QuestionType:             question.QuestionType,
+		QuestionText:             question.QuestionText,
+		ScoringWeight:            question.ScoringWeight,
+		IsRequired:               question.IsRequired,
+		SortOrder:                question.SortOrder,
+		MinValue:                 confidenceSliderDetail.MinValue,
+		MaxValue:                 confidenceSliderDetail.MaxValue,
+		SnapInterval:             confidenceSliderDetail.SnapInterval,
+		DefaultValue:             confidenceSliderDetail.DefaultValue,
+		LabelLow:                 confidenceSliderDetail.LabelLow,
+		LabelHigh:                confidenceSliderDetail.LabelHigh,
+		ShowWarningOnLargeChange: confidenceSliderDetail.ShowWarningOnLargeChange,
+		EvidenceReferences:       evidenceReferenceResponses,
+		CreatedAt:                question.CreatedAt,
+		UpdatedAt:                question.UpdatedAt,
 	}
 }
 

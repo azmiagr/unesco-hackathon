@@ -598,6 +598,41 @@ func (r *Rest) CreateOpenEndedQuestionByAdmin(c *gin.Context) {
 	response.Success(c, http.StatusCreated, "open ended question created", result)
 }
 
+func (r *Rest) CreateConfidenceSliderQuestionByAdmin(c *gin.Context) {
+	adminUser, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseVersionID, err := helper.ParseUUIDParam(c, "caseVersionID", "invalid case version id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.AdminCreateConfidenceSliderQuestionRequest
+	err = c.ShouldBindJSON(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid create confidence slider question request"))
+		return
+	}
+
+	result, err := r.service.CaseService.CreateConfidenceSliderQuestionByAdmin(adminUser.UserID, caseID, caseVersionID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, "confidence slider question created", result)
+}
+
 func (r *Rest) UpdateSocialPostEvidenceByAdmin(c *gin.Context) {
 	adminUser, caseID, caseVersionID, caseEvidenceID, err := parseAdminEvidenceRoute(c)
 	if err != nil {

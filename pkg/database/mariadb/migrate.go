@@ -27,6 +27,7 @@ func Migrate(db *gorm.DB) error {
 		&entity.CaseQuestionMCQOption{},
 		&entity.CaseQuestionEvidenceReference{},
 		&entity.CaseQuestionOpenEndedDetail{},
+		&entity.CaseQuestionConfidenceSliderDetail{},
 		&entity.AdminLoginOtpSession{},
 		&entity.OtpCode{},
 		&entity.Avatar{},

@@ -82,6 +82,7 @@ type ICaseService interface {
 	CreatePublicAnnouncementEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreatePublicAnnouncementEvidenceRequest) (*model.AdminCreatePublicAnnouncementEvidenceResponse, error)
 	CreateMCQQuestionByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateMCQQuestionRequest) (*model.AdminCreateMCQQuestionResponse, error)
 	CreateOpenEndedQuestionByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateOpenEndedQuestionRequest) (*model.AdminCreateOpenEndedQuestionResponse, error)
+	CreateConfidenceSliderQuestionByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateConfidenceSliderQuestionRequest) (*model.AdminCreateConfidenceSliderQuestionResponse, error)
 	UpdateSocialPostEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID, req model.AdminUpdateSocialPostEvidenceRequest) (*model.AdminUpdateSocialPostEvidenceResponse, error)
 	UpdateArticleEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID, req model.AdminUpdateArticleEvidenceRequest) (*model.AdminUpdateArticleEvidenceResponse, error)
 	UpdateBlogEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID, req model.AdminUpdateBlogEvidenceRequest) (*model.AdminUpdateBlogEvidenceResponse, error)

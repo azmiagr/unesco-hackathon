@@ -18,9 +18,10 @@ type CaseQuestion struct {
 	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt      time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 
-	MCQOptions         []CaseQuestionMCQOption         `json:"mcq_options" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
-	EvidenceReferences []CaseQuestionEvidenceReference `json:"evidence_references" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
-	OpenEndedDetail    *CaseQuestionOpenEndedDetail    `json:"open_ended_detail" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
+	MCQOptions             []CaseQuestionMCQOption             `json:"mcq_options" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
+	EvidenceReferences     []CaseQuestionEvidenceReference     `json:"evidence_references" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
+	OpenEndedDetail        *CaseQuestionOpenEndedDetail        `json:"open_ended_detail" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
+	ConfidenceSliderDetail *CaseQuestionConfidenceSliderDetail `json:"confidence_slider_detail" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
 }
 
 type CaseQuestionMCQOption struct {
@@ -51,4 +52,17 @@ type CaseQuestionOpenEndedDetail struct {
 	MaxScore          int       `json:"max_score" gorm:"type:int;not null;default:1"`
 	CreatedAt         time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt         time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+type CaseQuestionConfidenceSliderDetail struct {
+	CaseQuestionID           uuid.UUID `json:"case_question_id" gorm:"type:varchar(36);primaryKey"`
+	MinValue                 int       `json:"min_value" gorm:"type:int;not null;default:0"`
+	MaxValue                 int       `json:"max_value" gorm:"type:int;not null;default:100"`
+	SnapInterval             int       `json:"snap_interval" gorm:"type:int;not null;default:1"`
+	DefaultValue             int       `json:"default_value" gorm:"type:int;not null;default:0"`
+	LabelLow                 string    `json:"label_low" gorm:"type:varchar(150);not null"`
+	LabelHigh                string    `json:"label_high" gorm:"type:varchar(150);not null"`
+	ShowWarningOnLargeChange bool      `json:"show_warning_on_large_change" gorm:"not null;default:false"`
+	CreatedAt                time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt                time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
