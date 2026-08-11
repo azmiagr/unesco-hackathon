@@ -44,6 +44,7 @@ func (r *Rest) MountEndpoint() {
 	admin.GET("/users/:userID", r.GetAdminUserDetail)
 	admin.GET("roles", r.GetAllRoles)
 	admin.GET("/item-categories", r.ListItemCategoriesByAdmin)
+	admin.GET("/redeem-types", r.ListRedeemTypesByAdmin)
 	admin.POST("/users", r.CreateUserByAdmin)
 	admin.PATCH("/users/:userID", r.UpdateUserByAdmin)
 	admin.PATCH("/users/:userID/access", r.UpdateAdminUserAccess)
@@ -55,6 +56,13 @@ func (r *Rest) MountEndpoint() {
 	items.POST("", r.CreateItemByAdmin)
 	items.PATCH("/:itemID", r.UpdateItemByAdmin)
 	items.DELETE("/:itemID", r.DeleteItemByAdmin)
+
+	redeemItems := admin.Group("/redeem-items")
+	redeemItems.GET("", r.ListRedeemItemsByAdmin)
+	redeemItems.GET("/:redeemItemID", r.GetRedeemItemDetailByAdmin)
+	redeemItems.POST("", r.CreateRedeemItemByAdmin)
+	redeemItems.PATCH("/:redeemItemID", r.UpdateRedeemItemByAdmin)
+	redeemItems.DELETE("/:redeemItemID", r.DeleteRedeemItemByAdmin)
 
 	cases := admin.Group("/cases")
 	cases.GET("/lookups", r.GetCaseLookupsByAdmin)

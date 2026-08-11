@@ -14,6 +14,7 @@ type Service struct {
 	CaseService   ICaseService
 	AvatarService IAvatarService
 	ItemService   IItemService
+	RedeemService IRedeemService
 }
 
 func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtAuth jwt.Interface, supabase supabase.Interface) *Service {
@@ -23,6 +24,7 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 	caseService := NewCaseService(repository.CaseRepository, repository.CaseVersionRepository, repository.CaseEvidenceRepository, repository.CaseQuestionRepository, repository.CaseChatbotConfigRepository, repository.CaseScoringOutcomeRepository, supabase)
 	avatarService := NewAvatarService(repository.AvatarRepository)
 	itemService := NewItemService(repository.ItemRepository, repository.ItemCategoryRepository, supabase)
+	redeemService := NewRedeemService(repository.RedeemItemRepository, repository.RedeemTypeRepository, supabase)
 
 	return &Service{
 		UserService:   userService,
@@ -31,5 +33,6 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 		CaseService:   caseService,
 		AvatarService: avatarService,
 		ItemService:   itemService,
+		RedeemService: redeemService,
 	}
 }
