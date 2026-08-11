@@ -13,6 +13,7 @@ type Repository struct {
 	CaseVersionRepository         ICaseVersionRepository
 	CaseEvidenceRepository        ICaseEvidenceRepository
 	CaseQuestionRepository        ICaseQuestionRepository
+	CaseChatbotConfigRepository   ICaseChatbotConfigRepository
 }
 
 func NewRepository(db *gorm.DB) *Repository {
@@ -27,5 +28,6 @@ func NewRepository(db *gorm.DB) *Repository {
 		CaseVersionRepository:         NewCaseVersionRepository(db),
 		CaseEvidenceRepository:        NewCaseEvidenceRepository(db),
 		CaseQuestionRepository:        NewCaseQuestionRepository(db),
+		CaseChatbotConfigRepository:   NewCaseChatbotConfigRepository(db),
 	}
 }

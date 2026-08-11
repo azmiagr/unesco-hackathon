@@ -55,6 +55,8 @@ func (r *Rest) MountEndpoint() {
 	cases.GET("/:caseID/questions", r.ListCaseQuestionsByAdmin)
 	cases.GET("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID", r.GetCaseEvidenceDetailByAdmin)
 	cases.GET("/:caseID/versions/:caseVersionID/questions/:caseQuestionID", r.GetCaseQuestionDetailByAdmin)
+	cases.GET("/:caseID/chatbot-config", r.GetCaseChatbotConfigByAdmin)
+	cases.PUT("/:caseID/chatbot-config", r.UpsertCaseChatbotConfigByAdmin)
 	cases.GET("/:caseID", r.GetCaseDetailByAdmin)
 	cases.POST("", r.CreateCaseByAdmin)
 	cases.PATCH("/:caseID", r.UpdateCaseByAdmin)

@@ -32,5 +32,6 @@ type Case struct {
 	UpdatedAt                time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
 	DeletedAt                gorm.DeletedAt `json:"deleted_at" gorm:"index"`
 
-	Versions []CaseVersion `gorm:"foreignKey:CaseID;references:CaseID;constraint:onDelete:CASCADE"`
+	Versions      []CaseVersion      `gorm:"foreignKey:CaseID;references:CaseID;constraint:onDelete:CASCADE"`
+	ChatbotConfig *CaseChatbotConfig `gorm:"foreignKey:CaseID;references:CaseID;constraint:onDelete:CASCADE"`
 }
