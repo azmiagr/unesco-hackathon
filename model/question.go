@@ -194,8 +194,40 @@ type AdminListCaseQuestionsResponse struct {
 }
 
 type AdminQuestionDetailResponse struct {
-	QuestionType     string                                 `json:"question_type"`
-	MCQ              *AdminMCQQuestionResponse              `json:"mcq,omitempty"`
-	OpenEnded        *AdminOpenEndedQuestionResponse        `json:"open_ended,omitempty"`
-	ConfidenceSlider *AdminConfidenceSliderQuestionResponse `json:"confidence_slider,omitempty"`
+	QuestionType        string                                    `json:"question_type"`
+	MCQ                 *AdminMCQQuestionResponse                 `json:"mcq,omitempty"`
+	OpenEnded           *AdminOpenEndedQuestionResponse           `json:"open_ended,omitempty"`
+	ConfidenceSlider    *AdminConfidenceSliderQuestionResponse    `json:"confidence_slider,omitempty"`
+	ClaimClassification *AdminClaimClassificationQuestionResponse `json:"claim_classification,omitempty"`
+}
+
+type AdminCreateClaimClassificationQuestionRequest struct {
+	QuestionText       string      `json:"question_text" binding:"required"`
+	ScoringWeight      int         `json:"scoring_weight" binding:"required"`
+	RelatedEvidenceIDs []uuid.UUID `json:"related_evidence_ids" binding:"required"`
+	TaxonomyTags       []string    `json:"taxonomy_tags" binding:"required"`
+	CorrectAnswer      string      `json:"correct_answer" binding:"required"`
+	Explanation        string      `json:"explanation"`
+	IsRequired         bool        `json:"is_required"`
+	SortOrder          int         `json:"sort_order"`
+}
+
+type AdminClaimClassificationQuestionResponse struct {
+	CaseQuestionID     uuid.UUID                                `json:"case_question_id"`
+	CaseVersionID      uuid.UUID                                `json:"case_version_id"`
+	QuestionType       string                                   `json:"question_type"`
+	QuestionText       string                                   `json:"question_text"`
+	Explanation        string                                   `json:"explanation"`
+	ScoringWeight      int                                      `json:"scoring_weight"`
+	IsRequired         bool                                     `json:"is_required"`
+	SortOrder          int                                      `json:"sort_order"`
+	TaxonomyTags       []string                                 `json:"taxonomy_tags"`
+	CorrectAnswer      string                                   `json:"correct_answer"`
+	EvidenceReferences []AdminQuestionEvidenceReferenceResponse `json:"evidence_references"`
+	CreatedAt          time.Time                                `json:"created_at"`
+	UpdatedAt          time.Time                                `json:"updated_at"`
+}
+
+type AdminCreateClaimClassificationQuestionResponse struct {
+	Question AdminClaimClassificationQuestionResponse `json:"question"`
 }

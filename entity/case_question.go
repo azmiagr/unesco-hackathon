@@ -18,10 +18,11 @@ type CaseQuestion struct {
 	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt      time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 
-	MCQOptions             []CaseQuestionMCQOption             `json:"mcq_options" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
-	EvidenceReferences     []CaseQuestionEvidenceReference     `json:"evidence_references" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
-	OpenEndedDetail        *CaseQuestionOpenEndedDetail        `json:"open_ended_detail" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
-	ConfidenceSliderDetail *CaseQuestionConfidenceSliderDetail `json:"confidence_slider_detail" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
+	MCQOptions                []CaseQuestionMCQOption                `json:"mcq_options" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
+	EvidenceReferences        []CaseQuestionEvidenceReference        `json:"evidence_references" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
+	OpenEndedDetail           *CaseQuestionOpenEndedDetail           `json:"open_ended_detail" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
+	ConfidenceSliderDetail    *CaseQuestionConfidenceSliderDetail    `json:"confidence_slider_detail" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
+	ClaimClassificationDetail *CaseQuestionClaimClassificationDetail `json:"claim_classification_detail" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`
 }
 
 type CaseQuestionMCQOption struct {
@@ -65,4 +66,12 @@ type CaseQuestionConfidenceSliderDetail struct {
 	ShowWarningOnLargeChange bool      `json:"show_warning_on_large_change" gorm:"not null;default:false"`
 	CreatedAt                time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt                time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+type CaseQuestionClaimClassificationDetail struct {
+	CaseQuestionID uuid.UUID `json:"case_question_id" gorm:"type:varchar(36);primaryKey"`
+	TaxonomyTags   string    `json:"taxonomy_tags" gorm:"type:json;not null"`
+	CorrectAnswer  string    `json:"correct_answer" gorm:"type:varchar(150);not null"`
+	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt      time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }

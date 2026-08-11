@@ -12,12 +12,14 @@ type ICaseQuestionRepository interface {
 	CreateMCQQuestion(tx *gorm.DB, question *entity.CaseQuestion, options []entity.CaseQuestionMCQOption, evidenceReferences []entity.CaseQuestionEvidenceReference) error
 	CreateOpenEndedQuestion(tx *gorm.DB, question *entity.CaseQuestion, openEndedDetail *entity.CaseQuestionOpenEndedDetail, evidenceReferences []entity.CaseQuestionEvidenceReference) error
 	CreateConfidenceSliderQuestion(tx *gorm.DB, question *entity.CaseQuestion, confidenceSliderDetail *entity.CaseQuestionConfidenceSliderDetail, evidenceReferences []entity.CaseQuestionEvidenceReference) error
+	CreateClaimClassificationQuestion(tx *gorm.DB, question *entity.CaseQuestion, claimClassificationDetail *entity.CaseQuestionClaimClassificationDetail, evidenceReferences []entity.CaseQuestionEvidenceReference) error
 	GetCaseQuestion(tx *gorm.DB, param model.GetCaseQuestionParam) (*entity.CaseQuestion, error)
 	GetCaseQuestionForUpdate(tx *gorm.DB, caseQuestionID uuid.UUID) (*entity.CaseQuestion, error)
 	ListCaseQuestions(tx *gorm.DB, param model.ListCaseQuestionsParam) ([]entity.CaseQuestion, error)
 	UpdateCaseQuestion(tx *gorm.DB, question *entity.CaseQuestion) error
 	UpdateOpenEndedQuestion(tx *gorm.DB, openEndedDetail *entity.CaseQuestionOpenEndedDetail) error
 	UpdateConfidenceSliderQuestion(tx *gorm.DB, confidenceSliderDetail *entity.CaseQuestionConfidenceSliderDetail) error
+	UpdateClaimClassificationQuestion(tx *gorm.DB, claimClassificationDetail *entity.CaseQuestionClaimClassificationDetail) error
 	ReplaceMCQOptions(tx *gorm.DB, caseQuestionID uuid.UUID, options []entity.CaseQuestionMCQOption) error
 	ReplaceEvidenceReferences(tx *gorm.DB, caseQuestionID uuid.UUID, evidenceReferences []entity.CaseQuestionEvidenceReference) error
 	DeleteCaseQuestion(tx *gorm.DB, caseQuestionID uuid.UUID) error
@@ -97,6 +99,32 @@ func (r *CaseQuestionRepository) CreateConfidenceSliderQuestion(
 	}
 
 	err = tx.Debug().Create(confidenceSliderDetail).Error
+	if err != nil {
+		return err
+	}
+
+	if len(evidenceReferences) > 0 {
+		err := tx.Debug().Create(&evidenceReferences).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *CaseQuestionRepository) CreateClaimClassificationQuestion(
+	tx *gorm.DB,
+	question *entity.CaseQuestion,
+	claimClassificationDetail *entity.CaseQuestionClaimClassificationDetail,
+	evidenceReferences []entity.CaseQuestionEvidenceReference,
+) error {
+	err := tx.Debug().Create(question).Error
+	if err != nil {
+		return err
+	}
+
+	err = tx.Debug().Create(claimClassificationDetail).Error
 	if err != nil {
 		return err
 	}
@@ -195,6 +223,15 @@ func (r *CaseQuestionRepository) UpdateConfidenceSliderQuestion(tx *gorm.DB, con
 	return nil
 }
 
+func (r *CaseQuestionRepository) UpdateClaimClassificationQuestion(tx *gorm.DB, claimClassificationDetail *entity.CaseQuestionClaimClassificationDetail) error {
+	err := tx.Debug().Save(claimClassificationDetail).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *CaseQuestionRepository) ReplaceMCQOptions(
 	tx *gorm.DB,
 	caseQuestionID uuid.UUID,
@@ -271,5 +308,6 @@ func preloadQuestionDetails(query *gorm.DB) *gorm.DB {
 			return db.Order("sort_order ASC").Order("created_at ASC")
 		}).
 		Preload("OpenEndedDetail").
-		Preload("ConfidenceSliderDetail")
+		Preload("ConfidenceSliderDetail").
+		Preload("ClaimClassificationDetail")
 }

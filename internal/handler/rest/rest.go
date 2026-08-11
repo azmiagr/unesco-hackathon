@@ -70,6 +70,7 @@ func (r *Rest) MountEndpoint() {
 	cases.POST("/:caseID/versions/:caseVersionID/questions/mcq", r.CreateMCQQuestionByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/questions/open-ended", r.CreateOpenEndedQuestionByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/questions/confidence-slider", r.CreateConfidenceSliderQuestionByAdmin)
+	cases.POST("/:caseID/versions/:caseVersionID/questions/claim-classification", r.CreateClaimClassificationQuestionByAdmin)
 	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/social-post", r.UpdateSocialPostEvidenceByAdmin)
 	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/article", r.UpdateArticleEvidenceByAdmin)
 	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/blog", r.UpdateBlogEvidenceByAdmin)
