@@ -77,6 +77,10 @@ type AdminCreateMCQQuestionResponse struct {
 	Question AdminMCQQuestionResponse `json:"question"`
 }
 
+type AdminUpdateMCQQuestionRequest = AdminCreateMCQQuestionRequest
+
+type AdminUpdateMCQQuestionResponse = AdminCreateMCQQuestionResponse
+
 type AdminCreateOpenEndedQuestionRequest struct {
 	QuestionText       string      `json:"question_text" binding:"required"`
 	ScoringWeight      int         `json:"scoring_weight" binding:"required"`
@@ -109,6 +113,10 @@ type AdminOpenEndedQuestionResponse struct {
 type AdminCreateOpenEndedQuestionResponse struct {
 	Question AdminOpenEndedQuestionResponse `json:"question"`
 }
+
+type AdminUpdateOpenEndedQuestionRequest = AdminCreateOpenEndedQuestionRequest
+
+type AdminUpdateOpenEndedQuestionResponse = AdminCreateOpenEndedQuestionResponse
 
 type AdminCreateConfidenceSliderQuestionRequest struct {
 	QuestionText             string      `json:"question_text" binding:"required"`
@@ -148,6 +156,10 @@ type AdminConfidenceSliderQuestionResponse struct {
 type AdminCreateConfidenceSliderQuestionResponse struct {
 	Question AdminConfidenceSliderQuestionResponse `json:"question"`
 }
+
+type AdminUpdateConfidenceSliderQuestionRequest = AdminCreateConfidenceSliderQuestionRequest
+
+type AdminUpdateConfidenceSliderQuestionResponse = AdminCreateConfidenceSliderQuestionResponse
 
 type AdminEvidenceOptionResponse struct {
 	CaseEvidenceID uuid.UUID `json:"case_evidence_id"`
@@ -230,4 +242,12 @@ type AdminClaimClassificationQuestionResponse struct {
 
 type AdminCreateClaimClassificationQuestionResponse struct {
 	Question AdminClaimClassificationQuestionResponse `json:"question"`
+}
+
+type AdminUpdateClaimClassificationQuestionRequest = AdminCreateClaimClassificationQuestionRequest
+
+type AdminUpdateClaimClassificationQuestionResponse = AdminCreateClaimClassificationQuestionResponse
+
+type AdminDeleteCaseQuestionResponse struct {
+	CaseQuestionID uuid.UUID `json:"case_question_id"`
 }

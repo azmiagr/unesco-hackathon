@@ -71,6 +71,10 @@ func (r *Rest) MountEndpoint() {
 	cases.POST("/:caseID/versions/:caseVersionID/questions/open-ended", r.CreateOpenEndedQuestionByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/questions/confidence-slider", r.CreateConfidenceSliderQuestionByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/questions/claim-classification", r.CreateClaimClassificationQuestionByAdmin)
+	cases.PATCH("/:caseID/versions/:caseVersionID/questions/:caseQuestionID/mcq", r.UpdateMCQQuestionByAdmin)
+	cases.PATCH("/:caseID/versions/:caseVersionID/questions/:caseQuestionID/open-ended", r.UpdateOpenEndedQuestionByAdmin)
+	cases.PATCH("/:caseID/versions/:caseVersionID/questions/:caseQuestionID/confidence-slider", r.UpdateConfidenceSliderQuestionByAdmin)
+	cases.PATCH("/:caseID/versions/:caseVersionID/questions/:caseQuestionID/claim-classification", r.UpdateClaimClassificationQuestionByAdmin)
 	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/social-post", r.UpdateSocialPostEvidenceByAdmin)
 	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/article", r.UpdateArticleEvidenceByAdmin)
 	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/blog", r.UpdateBlogEvidenceByAdmin)
@@ -78,6 +82,7 @@ func (r *Rest) MountEndpoint() {
 	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/chat-transcript", r.UpdateChatTranscriptEvidenceByAdmin)
 	cases.PATCH("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID/public-announcement", r.UpdatePublicAnnouncementEvidenceByAdmin)
 	cases.DELETE("/:caseID/versions/:caseVersionID/evidences/:caseEvidenceID", r.DeleteCaseEvidenceByAdmin)
+	cases.DELETE("/:caseID/versions/:caseVersionID/questions/:caseQuestionID", r.DeleteCaseQuestionByAdmin)
 }
 
 func (r *Rest) Run() {

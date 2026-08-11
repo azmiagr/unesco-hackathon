@@ -279,6 +279,41 @@ func (r *CaseQuestionRepository) ReplaceEvidenceReferences(
 func (r *CaseQuestionRepository) DeleteCaseQuestion(tx *gorm.DB, caseQuestionID uuid.UUID) error {
 	err := tx.Debug().
 		Where("case_question_id = ?", caseQuestionID).
+		Delete(&entity.CaseQuestionMCQOption{}).Error
+	if err != nil {
+		return err
+	}
+
+	err = tx.Debug().
+		Where("case_question_id = ?", caseQuestionID).
+		Delete(&entity.CaseQuestionEvidenceReference{}).Error
+	if err != nil {
+		return err
+	}
+
+	err = tx.Debug().
+		Where("case_question_id = ?", caseQuestionID).
+		Delete(&entity.CaseQuestionOpenEndedDetail{}).Error
+	if err != nil {
+		return err
+	}
+
+	err = tx.Debug().
+		Where("case_question_id = ?", caseQuestionID).
+		Delete(&entity.CaseQuestionConfidenceSliderDetail{}).Error
+	if err != nil {
+		return err
+	}
+
+	err = tx.Debug().
+		Where("case_question_id = ?", caseQuestionID).
+		Delete(&entity.CaseQuestionClaimClassificationDetail{}).Error
+	if err != nil {
+		return err
+	}
+
+	err = tx.Debug().
+		Where("case_question_id = ?", caseQuestionID).
 		Delete(&entity.CaseQuestion{}).Error
 	if err != nil {
 		return err

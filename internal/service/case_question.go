@@ -754,6 +754,536 @@ func (s *CaseService) CreateClaimClassificationQuestionByAdmin(
 	}, nil
 }
 
+func (s *CaseService) UpdateMCQQuestionByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseQuestionID uuid.UUID,
+	req model.AdminUpdateMCQQuestionRequest,
+) (*model.AdminUpdateMCQQuestionResponse, error) {
+	if err := validateAdminQuestionIDs(adminUserID, caseID, caseVersionID, caseQuestionID); err != nil {
+		return nil, err
+	}
+
+	questionText, err := helper.RequireTrimmedString(req.QuestionText, "question text is required")
+	if err != nil {
+		return nil, err
+	}
+
+	explanation, err := helper.RequireTrimmedString(req.Explanation, "explanation is required")
+	if err != nil {
+		return nil, err
+	}
+
+	if req.ScoringWeight < 0 || req.ScoringWeight > 100 {
+		return nil, appErrors.BadRequest("scoring weight must be between 0 and 100")
+	}
+
+	if len(req.Options) < 2 {
+		return nil, appErrors.BadRequest("mcq options must contain at least 2 items")
+	}
+
+	evidenceReferences, seenEvidenceIDs, err := buildQuestionEvidenceReferences(caseQuestionID, req.RelatedEvidenceIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	options := make([]entity.CaseQuestionMCQOption, 0, len(req.Options))
+	seenOptionCodes := map[string]bool{}
+	correctCount := 0
+	for i, optionReq := range req.Options {
+		optionCode := strings.ToUpper(strings.TrimSpace(optionReq.OptionCode))
+		if optionCode == "" {
+			return nil, appErrors.BadRequest("option code is required")
+		}
+		if seenOptionCodes[optionCode] {
+			return nil, appErrors.BadRequest("option codes cannot contain duplicates")
+		}
+
+		optionText, err := helper.RequireTrimmedString(optionReq.OptionText, "option text is required")
+		if err != nil {
+			return nil, err
+		}
+
+		if optionReq.IsCorrect {
+			correctCount++
+		}
+
+		seenOptionCodes[optionCode] = true
+		options = append(options, entity.CaseQuestionMCQOption{
+			CaseQuestionMCQOptionID: uuid.New(),
+			CaseQuestionID:          caseQuestionID,
+			OptionCode:              optionCode,
+			OptionText:              optionText,
+			IsCorrect:               optionReq.IsCorrect,
+			SortOrder:               i + 1,
+		})
+	}
+
+	if correctCount != 1 {
+		return nil, appErrors.BadRequest("mcq question must have exactly one correct option")
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	question, err := s.getEditableQuestionByAdmin(tx, caseID, caseVersionID, caseQuestionID, model.CaseQuestionTypeMCQ)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.validateQuestionEvidenceReferences(tx, caseVersionID, seenEvidenceIDs); err != nil {
+		return nil, err
+	}
+
+	question.QuestionText = questionText
+	question.Explanation = explanation
+	question.ScoringWeight = req.ScoringWeight
+	question.IsRequired = req.IsRequired
+	question.SortOrder = req.SortOrder
+
+	if err := s.caseQuestionRepo.UpdateCaseQuestion(tx, question); err != nil {
+		return nil, appErrors.InternalServer("failed to update mcq question")
+	}
+	if err := s.caseQuestionRepo.ReplaceMCQOptions(tx, question.CaseQuestionID, options); err != nil {
+		return nil, appErrors.InternalServer("failed to replace mcq options")
+	}
+	if err := s.caseQuestionRepo.ReplaceEvidenceReferences(tx, question.CaseQuestionID, evidenceReferences); err != nil {
+		return nil, appErrors.InternalServer("failed to replace question evidence references")
+	}
+	if err := tx.Commit().Error; err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminUpdateMCQQuestionResponse{
+		Question: mapMCQQuestionResponse(question, options, evidenceReferences),
+	}, nil
+}
+
+func (s *CaseService) UpdateOpenEndedQuestionByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseQuestionID uuid.UUID,
+	req model.AdminUpdateOpenEndedQuestionRequest,
+) (*model.AdminUpdateOpenEndedQuestionResponse, error) {
+	if err := validateAdminQuestionIDs(adminUserID, caseID, caseVersionID, caseQuestionID); err != nil {
+		return nil, err
+	}
+
+	questionText, err := helper.RequireTrimmedString(req.QuestionText, "question text is required")
+	if err != nil {
+		return nil, err
+	}
+	expectedKeyPoints, err := helper.RequireTrimmedString(req.ExpectedKeyPoints, "expected key points are required")
+	if err != nil {
+		return nil, err
+	}
+	evaluationRubric, err := helper.RequireTrimmedString(req.EvaluationRubric, "evaluation rubric is required")
+	if err != nil {
+		return nil, err
+	}
+	if req.ScoringWeight < 0 || req.ScoringWeight > 100 {
+		return nil, appErrors.BadRequest("scoring weight must be between 0 and 100")
+	}
+	if req.MaxScore < 1 {
+		return nil, appErrors.BadRequest("max score must be greater than 0")
+	}
+
+	minimumKeywords, minimumKeywordsJSON, err := normalizeQuestionKeywords(req.MinimumKeywords)
+	if err != nil {
+		return nil, err
+	}
+	evidenceReferences, seenEvidenceIDs, err := buildQuestionEvidenceReferences(caseQuestionID, req.RelatedEvidenceIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	question, err := s.getEditableQuestionByAdmin(tx, caseID, caseVersionID, caseQuestionID, model.CaseQuestionTypeOpenEnded)
+	if err != nil {
+		return nil, err
+	}
+	if question.OpenEndedDetail == nil {
+		return nil, appErrors.InternalServer("open ended question detail not found")
+	}
+	if err := s.validateQuestionEvidenceReferences(tx, caseVersionID, seenEvidenceIDs); err != nil {
+		return nil, err
+	}
+
+	question.QuestionText = questionText
+	question.Explanation = ""
+	question.ScoringWeight = req.ScoringWeight
+	question.IsRequired = req.IsRequired
+	question.SortOrder = req.SortOrder
+	question.OpenEndedDetail.ExpectedKeyPoints = expectedKeyPoints
+	question.OpenEndedDetail.MinimumKeywords = minimumKeywordsJSON
+	question.OpenEndedDetail.EvaluationRubric = evaluationRubric
+	question.OpenEndedDetail.MaxScore = req.MaxScore
+
+	if err := s.caseQuestionRepo.UpdateCaseQuestion(tx, question); err != nil {
+		return nil, appErrors.InternalServer("failed to update open ended question")
+	}
+	if err := s.caseQuestionRepo.UpdateOpenEndedQuestion(tx, question.OpenEndedDetail); err != nil {
+		return nil, appErrors.InternalServer("failed to update open ended question detail")
+	}
+	if err := s.caseQuestionRepo.ReplaceEvidenceReferences(tx, question.CaseQuestionID, evidenceReferences); err != nil {
+		return nil, appErrors.InternalServer("failed to replace question evidence references")
+	}
+	if err := tx.Commit().Error; err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminUpdateOpenEndedQuestionResponse{
+		Question: mapOpenEndedQuestionResponse(question, question.OpenEndedDetail, minimumKeywords, evidenceReferences),
+	}, nil
+}
+
+func (s *CaseService) UpdateConfidenceSliderQuestionByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseQuestionID uuid.UUID,
+	req model.AdminUpdateConfidenceSliderQuestionRequest,
+) (*model.AdminUpdateConfidenceSliderQuestionResponse, error) {
+	if err := validateAdminQuestionIDs(adminUserID, caseID, caseVersionID, caseQuestionID); err != nil {
+		return nil, err
+	}
+
+	questionText, err := helper.RequireTrimmedString(req.QuestionText, "question text is required")
+	if err != nil {
+		return nil, err
+	}
+	labelLow, err := helper.RequireTrimmedString(req.LabelLow, "label low is required")
+	if err != nil {
+		return nil, err
+	}
+	labelHigh, err := helper.RequireTrimmedString(req.LabelHigh, "label high is required")
+	if err != nil {
+		return nil, err
+	}
+	if len(labelLow) > 150 {
+		return nil, appErrors.BadRequest("label low is too long")
+	}
+	if len(labelHigh) > 150 {
+		return nil, appErrors.BadRequest("label high is too long")
+	}
+	if req.ScoringWeight < 0 || req.ScoringWeight > 100 {
+		return nil, appErrors.BadRequest("scoring weight must be between 0 and 100")
+	}
+	if req.MinValue >= req.MaxValue {
+		return nil, appErrors.BadRequest("min value must be less than max value")
+	}
+	if req.SnapInterval < 1 {
+		return nil, appErrors.BadRequest("snap interval must be greater than 0")
+	}
+	if req.DefaultValue < req.MinValue || req.DefaultValue > req.MaxValue {
+		return nil, appErrors.BadRequest("default value must be between min value and max value")
+	}
+	if (req.DefaultValue-req.MinValue)%req.SnapInterval != 0 {
+		return nil, appErrors.BadRequest("default value must align with snap interval")
+	}
+
+	evidenceReferences, seenEvidenceIDs, err := buildQuestionEvidenceReferences(caseQuestionID, req.RelatedEvidenceIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	question, err := s.getEditableQuestionByAdmin(tx, caseID, caseVersionID, caseQuestionID, model.CaseQuestionTypeConfidenceSlider)
+	if err != nil {
+		return nil, err
+	}
+	if question.ConfidenceSliderDetail == nil {
+		return nil, appErrors.InternalServer("confidence slider question detail not found")
+	}
+
+	err = s.validateQuestionEvidenceReferences(tx, caseVersionID, seenEvidenceIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	question.QuestionText = questionText
+	question.Explanation = ""
+	question.ScoringWeight = req.ScoringWeight
+	question.IsRequired = req.IsRequired
+	question.SortOrder = req.SortOrder
+	question.ConfidenceSliderDetail.MinValue = req.MinValue
+	question.ConfidenceSliderDetail.MaxValue = req.MaxValue
+	question.ConfidenceSliderDetail.SnapInterval = req.SnapInterval
+	question.ConfidenceSliderDetail.DefaultValue = req.DefaultValue
+	question.ConfidenceSliderDetail.LabelLow = labelLow
+	question.ConfidenceSliderDetail.LabelHigh = labelHigh
+	question.ConfidenceSliderDetail.ShowWarningOnLargeChange = req.ShowWarningOnLargeChange
+
+	err = s.caseQuestionRepo.UpdateCaseQuestion(tx, question)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update confidence slider question")
+	}
+
+	err = s.caseQuestionRepo.UpdateConfidenceSliderQuestion(tx, question.ConfidenceSliderDetail)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update confidence slider question detail")
+	}
+
+	err = s.caseQuestionRepo.ReplaceEvidenceReferences(tx, question.CaseQuestionID, evidenceReferences)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to replace question evidence references")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminUpdateConfidenceSliderQuestionResponse{
+		Question: mapConfidenceSliderQuestionResponse(question, question.ConfidenceSliderDetail, evidenceReferences),
+	}, nil
+}
+
+func (s *CaseService) UpdateClaimClassificationQuestionByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseQuestionID uuid.UUID,
+	req model.AdminUpdateClaimClassificationQuestionRequest,
+) (*model.AdminUpdateClaimClassificationQuestionResponse, error) {
+	if err := validateAdminQuestionIDs(adminUserID, caseID, caseVersionID, caseQuestionID); err != nil {
+		return nil, err
+	}
+
+	questionText, err := helper.RequireTrimmedString(req.QuestionText, "question text is required")
+	if err != nil {
+		return nil, err
+	}
+	correctAnswerInput, err := helper.RequireTrimmedString(req.CorrectAnswer, "correct answer is required")
+	if err != nil {
+		return nil, err
+	}
+	explanation := strings.TrimSpace(req.Explanation)
+	if req.ScoringWeight < 0 || req.ScoringWeight > 100 {
+		return nil, appErrors.BadRequest("scoring weight must be between 0 and 100")
+	}
+
+	taxonomyTags, taxonomyTagsJSON, err := normalizeQuestionStringItems(req.TaxonomyTags, "taxonomy tags are required")
+	if err != nil {
+		return nil, err
+	}
+	if len(taxonomyTags) < 2 {
+		return nil, appErrors.BadRequest("taxonomy tags must contain at least 2 items")
+	}
+	correctAnswer, ok := findMatchingQuestionItem(correctAnswerInput, taxonomyTags)
+	if !ok {
+		return nil, appErrors.BadRequest("correct answer must be one of taxonomy tags")
+	}
+	evidenceReferences, seenEvidenceIDs, err := buildQuestionEvidenceReferences(caseQuestionID, req.RelatedEvidenceIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	question, err := s.getEditableQuestionByAdmin(tx, caseID, caseVersionID, caseQuestionID, model.CaseQuestionTypeClaimClassification)
+	if err != nil {
+		return nil, err
+	}
+	if question.ClaimClassificationDetail == nil {
+		return nil, appErrors.InternalServer("claim classification question detail not found")
+	}
+	if err := s.validateQuestionEvidenceReferences(tx, caseVersionID, seenEvidenceIDs); err != nil {
+		return nil, err
+	}
+
+	question.QuestionText = questionText
+	question.Explanation = explanation
+	question.ScoringWeight = req.ScoringWeight
+	question.IsRequired = req.IsRequired
+	question.SortOrder = req.SortOrder
+	question.ClaimClassificationDetail.TaxonomyTags = taxonomyTagsJSON
+	question.ClaimClassificationDetail.CorrectAnswer = correctAnswer
+
+	err = s.caseQuestionRepo.UpdateCaseQuestion(tx, question)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update claim classification question")
+	}
+
+	err = s.caseQuestionRepo.UpdateClaimClassificationQuestion(tx, question.ClaimClassificationDetail)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to update claim classification question detail")
+	}
+
+	err = s.caseQuestionRepo.ReplaceEvidenceReferences(tx, question.CaseQuestionID, evidenceReferences)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to replace question evidence references")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminUpdateClaimClassificationQuestionResponse{
+		Question: mapClaimClassificationQuestionResponse(
+			question,
+			question.ClaimClassificationDetail,
+			taxonomyTags,
+			evidenceReferences,
+		),
+	}, nil
+}
+
+func (s *CaseService) DeleteCaseQuestionByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseQuestionID uuid.UUID,
+) (*model.AdminDeleteCaseQuestionResponse, error) {
+	if err := validateAdminQuestionIDs(adminUserID, caseID, caseVersionID, caseQuestionID); err != nil {
+		return nil, err
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	question, err := s.getEditableQuestionByAdmin(tx, caseID, caseVersionID, caseQuestionID, "")
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.caseQuestionRepo.DeleteCaseQuestion(tx, question.CaseQuestionID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to delete case question")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminDeleteCaseQuestionResponse{
+		CaseQuestionID: question.CaseQuestionID,
+	}, nil
+}
+
+func validateAdminQuestionIDs(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseQuestionID uuid.UUID) error {
+	if adminUserID == uuid.Nil {
+		return appErrors.Unauthorized("unauthorized")
+	}
+	if caseID == uuid.Nil {
+		return appErrors.BadRequest("invalid case id")
+	}
+	if caseVersionID == uuid.Nil {
+		return appErrors.BadRequest("invalid case version id")
+	}
+	if caseQuestionID == uuid.Nil {
+		return appErrors.BadRequest("invalid case question id")
+	}
+
+	return nil
+}
+
+func (s *CaseService) getEditableQuestionByAdmin(
+	tx *gorm.DB,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+	caseQuestionID uuid.UUID,
+	questionType string,
+) (*entity.CaseQuestion, error) {
+	caseVersion, err := s.caseVersionRepo.GetCaseVersionForUpdate(tx, caseVersionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case version not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case version")
+	}
+	if caseVersion.CaseID != caseID {
+		return nil, appErrors.NotFound("case version not found")
+	}
+	if caseVersion.Status != model.CaseStatusDraft {
+		return nil, appErrors.Conflict("case version is not editable")
+	}
+
+	lockedQuestion, err := s.caseQuestionRepo.GetCaseQuestionForUpdate(tx, caseQuestionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case question not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case question")
+	}
+	if lockedQuestion.CaseVersionID != caseVersionID {
+		return nil, appErrors.NotFound("case question not found")
+	}
+	if questionType != "" && lockedQuestion.QuestionType != questionType {
+		return nil, appErrors.BadRequest("question type does not match endpoint")
+	}
+
+	question, err := s.caseQuestionRepo.GetCaseQuestion(tx, model.GetCaseQuestionParam{
+		CaseQuestionID: caseQuestionID,
+		CaseVersionID:  caseVersionID,
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get case question")
+	}
+
+	return question, nil
+}
+
+func buildQuestionEvidenceReferences(
+	caseQuestionID uuid.UUID,
+	relatedEvidenceIDs []uuid.UUID,
+) ([]entity.CaseQuestionEvidenceReference, map[uuid.UUID]bool, error) {
+	if len(relatedEvidenceIDs) == 0 {
+		return nil, nil, appErrors.BadRequest("related evidence ids are required")
+	}
+
+	evidenceReferences := make([]entity.CaseQuestionEvidenceReference, 0, len(relatedEvidenceIDs))
+	seenEvidenceIDs := map[uuid.UUID]bool{}
+	for i, evidenceID := range relatedEvidenceIDs {
+		if evidenceID == uuid.Nil {
+			return nil, nil, appErrors.BadRequest("invalid related evidence id")
+		}
+		if seenEvidenceIDs[evidenceID] {
+			return nil, nil, appErrors.BadRequest("related evidence ids cannot contain duplicates")
+		}
+
+		seenEvidenceIDs[evidenceID] = true
+		evidenceReferences = append(evidenceReferences, entity.CaseQuestionEvidenceReference{
+			CaseQuestionEvidenceReferenceID: uuid.New(),
+			CaseQuestionID:                  caseQuestionID,
+			CaseEvidenceID:                  evidenceID,
+			SortOrder:                       i + 1,
+		})
+	}
+
+	return evidenceReferences, seenEvidenceIDs, nil
+}
+
+func (s *CaseService) validateQuestionEvidenceReferences(
+	tx *gorm.DB,
+	caseVersionID uuid.UUID,
+	seenEvidenceIDs map[uuid.UUID]bool,
+) error {
+	for evidenceID := range seenEvidenceIDs {
+		_, err := s.caseEvidenceRepo.GetCaseEvidence(tx, model.GetCaseEvidenceParam{
+			CaseEvidenceID: evidenceID,
+			CaseVersionID:  caseVersionID,
+		})
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return appErrors.BadRequest("related evidence must belong to case version")
+			}
+			return appErrors.InternalServer("failed to validate related evidence")
+		}
+	}
+
+	return nil
+}
+
 func normalizeQuestionStringItems(items []string, requiredMessage string) ([]string, string, error) {
 	normalizedItems := make([]string, 0, len(items))
 	seen := map[string]bool{}

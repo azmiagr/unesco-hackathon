@@ -807,6 +807,114 @@ func (r *Rest) DeleteCaseEvidenceByAdmin(c *gin.Context) {
 	response.Success(c, http.StatusOK, "case evidence deleted", result)
 }
 
+func (r *Rest) UpdateMCQQuestionByAdmin(c *gin.Context) {
+	adminUser, caseID, caseVersionID, caseQuestionID, err := parseAdminQuestionRoute(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.AdminUpdateMCQQuestionRequest
+	err = c.ShouldBindJSON(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid update mcq question request"))
+		return
+	}
+
+	result, err := r.service.CaseService.UpdateMCQQuestionByAdmin(adminUser.UserID, caseID, caseVersionID, caseQuestionID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "mcq question updated", result)
+}
+
+func (r *Rest) UpdateOpenEndedQuestionByAdmin(c *gin.Context) {
+	adminUser, caseID, caseVersionID, caseQuestionID, err := parseAdminQuestionRoute(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.AdminUpdateOpenEndedQuestionRequest
+	err = c.ShouldBindJSON(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid update open ended question request"))
+		return
+	}
+
+	result, err := r.service.CaseService.UpdateOpenEndedQuestionByAdmin(adminUser.UserID, caseID, caseVersionID, caseQuestionID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "open ended question updated", result)
+}
+
+func (r *Rest) UpdateConfidenceSliderQuestionByAdmin(c *gin.Context) {
+	adminUser, caseID, caseVersionID, caseQuestionID, err := parseAdminQuestionRoute(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.AdminUpdateConfidenceSliderQuestionRequest
+	err = c.ShouldBindJSON(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid update confidence slider question request"))
+		return
+	}
+
+	result, err := r.service.CaseService.UpdateConfidenceSliderQuestionByAdmin(adminUser.UserID, caseID, caseVersionID, caseQuestionID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "confidence slider question updated", result)
+}
+
+func (r *Rest) UpdateClaimClassificationQuestionByAdmin(c *gin.Context) {
+	adminUser, caseID, caseVersionID, caseQuestionID, err := parseAdminQuestionRoute(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.AdminUpdateClaimClassificationQuestionRequest
+	err = c.ShouldBindJSON(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid update claim classification question request"))
+		return
+	}
+
+	result, err := r.service.CaseService.UpdateClaimClassificationQuestionByAdmin(adminUser.UserID, caseID, caseVersionID, caseQuestionID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "claim classification question updated", result)
+}
+
+func (r *Rest) DeleteCaseQuestionByAdmin(c *gin.Context) {
+	adminUser, caseID, caseVersionID, caseQuestionID, err := parseAdminQuestionRoute(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.CaseService.DeleteCaseQuestionByAdmin(adminUser.UserID, caseID, caseVersionID, caseQuestionID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "case question deleted", result)
+}
+
 func parseAdminEvidenceRoute(c *gin.Context) (*entity.User, uuid.UUID, uuid.UUID, uuid.UUID, error) {
 	adminUser, err := helper.GetAuthenticatedUser(c)
 	if err != nil {
@@ -829,6 +937,30 @@ func parseAdminEvidenceRoute(c *gin.Context) (*entity.User, uuid.UUID, uuid.UUID
 	}
 
 	return adminUser, caseID, caseVersionID, caseEvidenceID, nil
+}
+
+func parseAdminQuestionRoute(c *gin.Context) (*entity.User, uuid.UUID, uuid.UUID, uuid.UUID, error) {
+	adminUser, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		return nil, uuid.Nil, uuid.Nil, uuid.Nil, err
+	}
+
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		return nil, uuid.Nil, uuid.Nil, uuid.Nil, err
+	}
+
+	caseVersionID, err := helper.ParseUUIDParam(c, "caseVersionID", "invalid case version id")
+	if err != nil {
+		return nil, uuid.Nil, uuid.Nil, uuid.Nil, err
+	}
+
+	caseQuestionID, err := helper.ParseUUIDParam(c, "caseQuestionID", "invalid case question id")
+	if err != nil {
+		return nil, uuid.Nil, uuid.Nil, uuid.Nil, err
+	}
+
+	return adminUser, caseID, caseVersionID, caseQuestionID, nil
 }
 
 func (r *Rest) CreateClaimClassificationQuestionByAdmin(c *gin.Context) {
