@@ -62,6 +62,7 @@ func (r *Rest) MountEndpoint() {
 	cases.GET("/:caseID", r.GetCaseDetailByAdmin)
 	cases.POST("", r.CreateCaseByAdmin)
 	cases.PATCH("/:caseID", r.UpdateCaseByAdmin)
+	cases.PATCH("/:caseID/publish", r.PublishCaseByAdmin)
 	cases.DELETE("/:caseID", r.HardDeleteCaseByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/evidences/social-post", r.CreateSocialPostEvidenceByAdmin)
 	cases.POST("/:caseID/versions/:caseVersionID/evidences/article", r.CreateArticleEvidenceByAdmin)

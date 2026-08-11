@@ -12,6 +12,7 @@ type ICaseChatbotConfigRepository interface {
 	CreateCaseChatbotConfig(tx *gorm.DB, config *entity.CaseChatbotConfig) error
 	GetCaseChatbotConfig(tx *gorm.DB, param model.GetCaseChatbotConfigParam) (*entity.CaseChatbotConfig, error)
 	GetCaseChatbotConfigForUpdate(tx *gorm.DB, caseID uuid.UUID) (*entity.CaseChatbotConfig, error)
+	CaseChatbotConfigExists(tx *gorm.DB, caseID uuid.UUID) (bool, error)
 	UpdateCaseChatbotConfig(tx *gorm.DB, config *entity.CaseChatbotConfig) error
 	UpsertCaseChatbotConfig(tx *gorm.DB, config *entity.CaseChatbotConfig) error
 	DeleteCaseChatbotConfig(tx *gorm.DB, caseID uuid.UUID) error
@@ -62,6 +63,19 @@ func (r *CaseChatbotConfigRepository) GetCaseChatbotConfigForUpdate(tx *gorm.DB,
 	}
 
 	return &config, nil
+}
+
+func (r *CaseChatbotConfigRepository) CaseChatbotConfigExists(tx *gorm.DB, caseID uuid.UUID) (bool, error) {
+	var count int64
+
+	err := tx.Model(&entity.CaseChatbotConfig{}).
+		Where("case_id = ?", caseID).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
 }
 
 func (r *CaseChatbotConfigRepository) UpdateCaseChatbotConfig(tx *gorm.DB, config *entity.CaseChatbotConfig) error {

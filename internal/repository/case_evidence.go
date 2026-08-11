@@ -19,6 +19,7 @@ type ICaseEvidenceRepository interface {
 	GetCaseEvidenceForUpdate(tx *gorm.DB, evidenceID uuid.UUID) (*entity.CaseEvidence, error)
 	ListCaseEvidences(tx *gorm.DB, param model.ListCaseEvidencesParam) ([]entity.CaseEvidence, error)
 	ListAdminCaseEvidenceRows(tx *gorm.DB, caseVersionID uuid.UUID) ([]model.AdminCaseEvidenceListRow, error)
+	CountCaseEvidences(tx *gorm.DB, caseVersionID uuid.UUID) (int64, error)
 	UpdateCaseEvidence(tx *gorm.DB, evidence *entity.CaseEvidence) error
 	UpdateSocialPostEvidence(tx *gorm.DB, socialPost *entity.CaseEvidenceSocialPost) error
 	UpdateArticleEvidence(tx *gorm.DB, article *entity.CaseEvidenceArticle) error
@@ -254,6 +255,19 @@ func (r *CaseEvidenceRepository) ListAdminCaseEvidenceRows(tx *gorm.DB, caseVers
 	}
 
 	return evidences, nil
+}
+
+func (r *CaseEvidenceRepository) CountCaseEvidences(tx *gorm.DB, caseVersionID uuid.UUID) (int64, error) {
+	var count int64
+
+	err := tx.Model(&entity.CaseEvidence{}).
+		Where("case_version_id = ?", caseVersionID).
+		Count(&count).Error
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }
 
 func (r *CaseEvidenceRepository) UpdateCaseEvidence(tx *gorm.DB, evidence *entity.CaseEvidence) error {

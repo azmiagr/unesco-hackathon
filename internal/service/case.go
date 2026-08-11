@@ -63,6 +63,7 @@ var allowedCaseStatuses = map[string]bool{
 type ICaseService interface {
 	CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCreateCaseRequest) (*model.AdminCreateCaseResponse, error)
 	UpdateCaseByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, req model.AdminUpdateCaseRequest) (*model.AdminUpdateCaseResponse, error)
+	PublishCaseByAdmin(adminUserID uuid.UUID, caseID uuid.UUID) (*model.AdminPublishCaseResponse, error)
 	HardDeleteCaseByAdmin(adminUserID uuid.UUID, caseID uuid.UUID) (*model.AdminDeleteCaseResponse, error)
 	ListCasesByAdmin(req model.AdminListCasesRequest) (*model.AdminListCasesResponse, error)
 	GetCaseDetailByAdmin(caseID uuid.UUID) (*model.AdminCaseDetailResponse, error)

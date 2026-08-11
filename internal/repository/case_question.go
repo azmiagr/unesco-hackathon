@@ -16,6 +16,7 @@ type ICaseQuestionRepository interface {
 	GetCaseQuestion(tx *gorm.DB, param model.GetCaseQuestionParam) (*entity.CaseQuestion, error)
 	GetCaseQuestionForUpdate(tx *gorm.DB, caseQuestionID uuid.UUID) (*entity.CaseQuestion, error)
 	ListCaseQuestions(tx *gorm.DB, param model.ListCaseQuestionsParam) ([]entity.CaseQuestion, error)
+	CountCaseQuestions(tx *gorm.DB, caseVersionID uuid.UUID) (int64, error)
 	UpdateCaseQuestion(tx *gorm.DB, question *entity.CaseQuestion) error
 	UpdateOpenEndedQuestion(tx *gorm.DB, openEndedDetail *entity.CaseQuestionOpenEndedDetail) error
 	UpdateConfidenceSliderQuestion(tx *gorm.DB, confidenceSliderDetail *entity.CaseQuestionConfidenceSliderDetail) error
@@ -194,6 +195,19 @@ func (r *CaseQuestionRepository) ListCaseQuestions(tx *gorm.DB, param model.List
 	}
 
 	return questions, nil
+}
+
+func (r *CaseQuestionRepository) CountCaseQuestions(tx *gorm.DB, caseVersionID uuid.UUID) (int64, error) {
+	var count int64
+
+	err := tx.Model(&entity.CaseQuestion{}).
+		Where("case_version_id = ?", caseVersionID).
+		Count(&count).Error
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }
 
 func (r *CaseQuestionRepository) UpdateCaseQuestion(tx *gorm.DB, question *entity.CaseQuestion) error {

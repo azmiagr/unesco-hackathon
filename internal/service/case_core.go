@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/azmiagr/unesco-hackathon/entity"
 	"github.com/azmiagr/unesco-hackathon/model"
@@ -14,6 +15,11 @@ import (
 	"github.com/azmiagr/unesco-hackathon/pkg/supabase"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+)
+
+const (
+	minPublishQuestionCount = 5
+	minPublishEvidenceCount = 3
 )
 
 func (s *CaseService) CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCreateCaseRequest) (*model.AdminCreateCaseResponse, error) {
@@ -330,6 +336,88 @@ func (s *CaseService) UpdateCaseByAdmin(
 	return mapAdminUpdateCaseResponse(caseEntity), nil
 }
 
+func (s *CaseService) PublishCaseByAdmin(
+	adminUserID uuid.UUID,
+	caseID uuid.UUID,
+) (*model.AdminPublishCaseResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+	if caseID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid case id")
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	caseEntity, err := s.caseRepo.GetCaseForUpdate(tx, caseID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("case not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case")
+	}
+	if caseEntity.Status == model.CaseStatusPublished {
+		return nil, appErrors.BadRequest("case is already published")
+	}
+	if caseEntity.Status == model.CaseStatusArchived {
+		return nil, appErrors.BadRequest("archived case cannot be published")
+	}
+
+	caseVersions, err := s.caseVersionRepo.ListCaseVersionsByCaseID(tx, caseID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to list case versions")
+	}
+	if len(caseVersions) == 0 {
+		return nil, appErrors.BadRequest("case version is required")
+	}
+
+	caseVersion, err := s.caseVersionRepo.GetCaseVersionForUpdate(tx, caseVersions[0].CaseVersionID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get case version")
+	}
+	if caseVersion.Status == model.CaseStatusPublished {
+		return nil, appErrors.BadRequest("case version is already published")
+	}
+	if caseVersion.Status == model.CaseStatusArchived {
+		return nil, appErrors.BadRequest("archived case version cannot be published")
+	}
+
+	requirements, err := s.buildPublishRequirements(tx, caseID, caseVersion.CaseVersionID)
+	if err != nil {
+		return nil, err
+	}
+	if !publishRequirementsMet(requirements) {
+		return nil, appErrors.BadRequest(buildPublishRequirementsErrorMessage(requirements))
+	}
+
+	publishedAt := time.Now()
+	caseEntity.Status = model.CaseStatusPublished
+	caseEntity.PublishedAt = &publishedAt
+	caseVersion.Status = model.CaseStatusPublished
+	caseVersion.PublishedAt = &publishedAt
+
+	if err := s.caseRepo.UpdateCase(tx, caseEntity); err != nil {
+		return nil, appErrors.InternalServer("failed to publish case")
+	}
+	if err := s.caseVersionRepo.UpdateCaseVersion(tx, caseVersion); err != nil {
+		return nil, appErrors.InternalServer("failed to publish case version")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminPublishCaseResponse{
+		CaseID:        caseEntity.CaseID,
+		CaseVersionID: caseVersion.CaseVersionID,
+		Status:        caseEntity.Status,
+		PublishedAt:   publishedAt,
+		Requirements:  requirements,
+	}, nil
+}
+
 func (s *CaseService) HardDeleteCaseByAdmin(adminUserID uuid.UUID, caseID uuid.UUID) (*model.AdminDeleteCaseResponse, error) {
 	if adminUserID == uuid.Nil {
 		return nil, appErrors.Unauthorized("unauthorized")
@@ -478,6 +566,94 @@ func (s *CaseService) GetCaseDetailByAdmin(caseID uuid.UUID) (*model.AdminCaseDe
 		Case:      *caseDetail,
 		Evidences: evidences,
 	}, nil
+}
+
+func (s *CaseService) buildPublishRequirements(
+	tx *gorm.DB,
+	caseID uuid.UUID,
+	caseVersionID uuid.UUID,
+) ([]model.AdminPublishCaseRequirementResponse, error) {
+	questionCount, err := s.caseQuestionRepo.CountCaseQuestions(tx, caseVersionID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to count case questions")
+	}
+
+	evidenceCount, err := s.caseEvidenceRepo.CountCaseEvidences(tx, caseVersionID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to count case evidences")
+	}
+
+	hasChatbotConfig, err := s.caseChatbotConfigRepo.CaseChatbotConfigExists(tx, caseID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to check case chatbot config")
+	}
+
+	hasScoringOutcomeConfig, err := s.caseScoringOutcomeRepo.CaseScoringOutcomeConfigExists(tx, caseVersionID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to check case scoring outcome config")
+	}
+
+	return []model.AdminPublishCaseRequirementResponse{
+		{
+			Key:      "questions",
+			Label:    "Minimal 5 soal sudah dibuat",
+			Required: minPublishQuestionCount,
+			Actual:   int(questionCount),
+			IsMet:    questionCount >= minPublishQuestionCount,
+		},
+		{
+			Key:      "evidences",
+			Label:    "Minimal 3 evidence sudah dilengkapi",
+			Required: minPublishEvidenceCount,
+			Actual:   int(evidenceCount),
+			IsMet:    evidenceCount >= minPublishEvidenceCount,
+		},
+		{
+			Key:   "ai_prompt",
+			Label: "AI prompt sudah dikonfigurasi",
+			IsMet: hasChatbotConfig,
+		},
+		{
+			Key:   "reward",
+			Label: "Reward sudah dikonfigurasi",
+			IsMet: hasScoringOutcomeConfig,
+		},
+	}, nil
+}
+
+func publishRequirementsMet(requirements []model.AdminPublishCaseRequirementResponse) bool {
+	for _, requirement := range requirements {
+		if !requirement.IsMet {
+			return false
+		}
+	}
+
+	return true
+}
+
+func buildPublishRequirementsErrorMessage(requirements []model.AdminPublishCaseRequirementResponse) string {
+	missingRequirements := []string{}
+	for _, requirement := range requirements {
+		if requirement.IsMet {
+			continue
+		}
+
+		if requirement.Required > 0 {
+			missingRequirements = append(
+				missingRequirements,
+				fmt.Sprintf("%s (%d/%d)", requirement.Label, requirement.Actual, requirement.Required),
+			)
+			continue
+		}
+
+		missingRequirements = append(missingRequirements, requirement.Label)
+	}
+
+	if len(missingRequirements) == 0 {
+		return "case publish requirements are not met"
+	}
+
+	return "case publish requirements are not met: " + strings.Join(missingRequirements, "; ")
 }
 
 func mapAdminUpdateCaseResponse(caseEntity *entity.Case) *model.AdminUpdateCaseResponse {

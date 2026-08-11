@@ -85,6 +85,28 @@ func (r *Rest) UpdateCaseByAdmin(c *gin.Context) {
 	response.Success(c, http.StatusOK, "case updated", result)
 }
 
+func (r *Rest) PublishCaseByAdmin(c *gin.Context) {
+	adminUser, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.CaseService.PublishCaseByAdmin(adminUser.UserID, caseID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "case published", result)
+}
+
 func (r *Rest) HardDeleteCaseByAdmin(c *gin.Context) {
 	adminUser, err := helper.GetAuthenticatedUser(c)
 	if err != nil {

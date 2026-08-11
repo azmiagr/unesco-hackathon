@@ -166,6 +166,22 @@ type AdminUpdateCaseResponse struct {
 	UpdatedAt                time.Time  `json:"updated_at"`
 }
 
+type AdminPublishCaseRequirementResponse struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Required int    `json:"required,omitempty"`
+	Actual   int    `json:"actual,omitempty"`
+	IsMet    bool   `json:"is_met"`
+}
+
+type AdminPublishCaseResponse struct {
+	CaseID        uuid.UUID                             `json:"case_id"`
+	CaseVersionID uuid.UUID                             `json:"case_version_id"`
+	Status        string                                `json:"status"`
+	PublishedAt   time.Time                             `json:"published_at"`
+	Requirements  []AdminPublishCaseRequirementResponse `json:"requirements"`
+}
+
 type AdminDeleteCaseResponse struct {
 	CaseID uuid.UUID `json:"case_id"`
 }

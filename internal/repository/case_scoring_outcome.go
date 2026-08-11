@@ -11,6 +11,7 @@ type ICaseScoringOutcomeRepository interface {
 	CreateCaseScoringOutcomeConfig(tx *gorm.DB, config *entity.CaseScoringOutcomeConfig, scoringRules []entity.CaseScoringRule, outcomeRules []entity.CaseOutcomeRule, cityImpactSettings []entity.CaseOutcomeCityImpactSetting) error
 	GetCaseScoringOutcomeConfig(tx *gorm.DB, caseVersionID uuid.UUID) (*entity.CaseScoringOutcomeConfig, error)
 	GetCaseScoringOutcomeConfigForUpdate(tx *gorm.DB, caseVersionID uuid.UUID) (*entity.CaseScoringOutcomeConfig, error)
+	CaseScoringOutcomeConfigExists(tx *gorm.DB, caseVersionID uuid.UUID) (bool, error)
 	UpsertCaseScoringOutcomeConfig(tx *gorm.DB, config *entity.CaseScoringOutcomeConfig, scoringRules []entity.CaseScoringRule, outcomeRules []entity.CaseOutcomeRule, cityImpactSettings []entity.CaseOutcomeCityImpactSetting) error
 	DeleteCaseScoringOutcomeConfig(tx *gorm.DB, caseVersionID uuid.UUID) error
 }
@@ -69,6 +70,19 @@ func (r *CaseScoringOutcomeRepository) GetCaseScoringOutcomeConfigForUpdate(
 	}
 
 	return &config, nil
+}
+
+func (r *CaseScoringOutcomeRepository) CaseScoringOutcomeConfigExists(tx *gorm.DB, caseVersionID uuid.UUID) (bool, error) {
+	var count int64
+
+	err := tx.Model(&entity.CaseScoringOutcomeConfig{}).
+		Where("case_version_id = ?", caseVersionID).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
 }
 
 func (r *CaseScoringOutcomeRepository) UpsertCaseScoringOutcomeConfig(
