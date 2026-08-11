@@ -8,10 +8,11 @@ import (
 )
 
 type Service struct {
-	UserService IUserService
-	AuthService IAuthService
-	RoleService IRoleService
-	CaseService ICaseService
+	UserService   IUserService
+	AuthService   IAuthService
+	RoleService   IRoleService
+	CaseService   ICaseService
+	AvatarService IAvatarService
 }
 
 func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtAuth jwt.Interface, supabase supabase.Interface) *Service {
@@ -19,11 +20,13 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 	authService := NewAuthService(repository.UserRepository, repository.AvatarRepository, repository.UserProfileRepository, repository.RegistrationSessionRepository, repository.RoleRepository, jwtAuth, bcrypt)
 	roleService := NewRoleService(repository.RoleRepository)
 	caseService := NewCaseService(repository.CaseRepository, repository.CaseVersionRepository, repository.CaseEvidenceRepository, repository.CaseQuestionRepository, repository.CaseChatbotConfigRepository, repository.CaseScoringOutcomeRepository, supabase)
+	avatarService := NewAvatarService(repository.AvatarRepository)
 
 	return &Service{
-		UserService: userService,
-		AuthService: authService,
-		RoleService: roleService,
-		CaseService: caseService,
+		UserService:   userService,
+		AuthService:   authService,
+		RoleService:   roleService,
+		CaseService:   caseService,
+		AvatarService: avatarService,
 	}
 }

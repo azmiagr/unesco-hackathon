@@ -8,6 +8,7 @@ import (
 
 type IAvatarRepository interface {
 	GetAvatar(tx *gorm.DB, param model.GetAvatarParam) (*entity.Avatar, error)
+	ListAvailableAvatars(tx *gorm.DB) ([]entity.Avatar, error)
 	CreateAvatar(tx *gorm.DB, avatar *entity.Avatar) error
 	UpdateAvatar(tx *gorm.DB, avatar *entity.Avatar) error
 }
@@ -28,6 +29,20 @@ func (r *AvatarRepository) GetAvatar(tx *gorm.DB, param model.GetAvatarParam) (*
 	}
 
 	return &avatar, nil
+}
+
+func (r *AvatarRepository) ListAvailableAvatars(tx *gorm.DB) ([]entity.Avatar, error) {
+	var avatars []entity.Avatar
+
+	err := tx.
+		Where("status = ? AND unlock_level = ?", "active", 0).
+		Order("created_at ASC").
+		Find(&avatars).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return avatars, nil
 }
 
 func (r *AvatarRepository) CreateAvatar(tx *gorm.DB, avatar *entity.Avatar) error {
