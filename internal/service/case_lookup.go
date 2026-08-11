@@ -37,5 +37,23 @@ func (s *CaseService) GetCaseLookups() (*model.AdminCaseLookupsResponse, error) 
 			{Value: model.CaseGenerationManual, Label: "Manual"},
 			{Value: model.CaseGenerationAIAssisted, Label: "AI-Assisted"},
 		},
+		ScoringCategories: []model.CaseLookupOptionResponse{
+			{Value: model.ScoringCategoryEvidenceEvaluation, Label: "Evaluasi bukti"},
+			{Value: model.ScoringCategoryClaimAnalysis, Label: "Analisis klaim"},
+			{Value: model.ScoringCategoryConfidenceCalibration, Label: "Kalibrasi keyakinan"},
+			{Value: model.ScoringCategoryReasoning, Label: "Penalaran"},
+			{Value: model.ScoringCategorySafetyJudgment, Label: "Penilaian keamanan/keputusan"},
+		},
+		OutcomeRules: []model.CaseLookupOptionResponse{
+			{Value: model.OutcomeRuleExpert, Label: "Expert"},
+			{Value: model.OutcomeRuleDeveloping, Label: "Developing"},
+			{Value: model.OutcomeRuleBeginner, Label: "Beginner"},
+		},
+		CityImpacts: []model.CaseLookupOptionResponse{
+			{Value: model.CityImpactHealth, Label: "Health"},
+			{Value: model.CityImpactTrust, Label: "Trust"},
+			{Value: model.CityImpactStability, Label: "Stability"},
+			{Value: model.CityImpactWellbeing, Label: "Wellbeing"},
+		},
 	}, nil
 }

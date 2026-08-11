@@ -73,6 +73,8 @@ type ICaseService interface {
 	GetCaseQuestionDetailByAdmin(caseID uuid.UUID, caseVersionID uuid.UUID, caseQuestionID uuid.UUID) (*model.AdminQuestionDetailResponse, error)
 	GetCaseChatbotConfigByAdmin(caseID uuid.UUID) (*model.AdminGetCaseChatbotConfigResponse, error)
 	UpsertCaseChatbotConfigByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, req model.AdminUpsertCaseChatbotConfigRequest) (*model.AdminUpsertCaseChatbotConfigResponse, error)
+	GetCaseScoringOutcomeConfigByAdmin(caseID uuid.UUID, caseVersionID uuid.UUID) (*model.AdminGetCaseScoringOutcomeConfigResponse, error)
+	UpsertCaseScoringOutcomeConfigByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminUpsertCaseScoringOutcomeConfigRequest) (*model.AdminUpsertCaseScoringOutcomeConfigResponse, error)
 	GetCaseLookups() (*model.AdminCaseLookupsResponse, error)
 	CreateSocialPostEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateSocialPostEvidenceRequest) (*model.AdminCreateSocialPostEvidenceResponse, error)
 	CreateArticleEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, req model.AdminCreateArticleEvidenceRequest) (*model.AdminCreateArticleEvidenceResponse, error)
@@ -99,13 +101,14 @@ type ICaseService interface {
 }
 
 type CaseService struct {
-	db                    *gorm.DB
-	caseRepo              repository.ICaseRepository
-	caseVersionRepo       repository.ICaseVersionRepository
-	caseEvidenceRepo      repository.ICaseEvidenceRepository
-	caseQuestionRepo      repository.ICaseQuestionRepository
-	caseChatbotConfigRepo repository.ICaseChatbotConfigRepository
-	storage               supabase.Interface
+	db                     *gorm.DB
+	caseRepo               repository.ICaseRepository
+	caseVersionRepo        repository.ICaseVersionRepository
+	caseEvidenceRepo       repository.ICaseEvidenceRepository
+	caseQuestionRepo       repository.ICaseQuestionRepository
+	caseChatbotConfigRepo  repository.ICaseChatbotConfigRepository
+	caseScoringOutcomeRepo repository.ICaseScoringOutcomeRepository
+	storage                supabase.Interface
 }
 
 func NewCaseService(
@@ -114,15 +117,17 @@ func NewCaseService(
 	caseEvidenceRepo repository.ICaseEvidenceRepository,
 	caseQuestionRepo repository.ICaseQuestionRepository,
 	caseChatbotConfigRepo repository.ICaseChatbotConfigRepository,
+	caseScoringOutcomeRepo repository.ICaseScoringOutcomeRepository,
 	storage supabase.Interface,
 ) ICaseService {
 	return &CaseService{
-		db:                    mariadb.Connection,
-		caseRepo:              caseRepo,
-		caseVersionRepo:       caseVersionRepo,
-		caseEvidenceRepo:      caseEvidenceRepo,
-		caseQuestionRepo:      caseQuestionRepo,
-		caseChatbotConfigRepo: caseChatbotConfigRepo,
-		storage:               storage,
+		db:                     mariadb.Connection,
+		caseRepo:               caseRepo,
+		caseVersionRepo:        caseVersionRepo,
+		caseEvidenceRepo:       caseEvidenceRepo,
+		caseQuestionRepo:       caseQuestionRepo,
+		caseChatbotConfigRepo:  caseChatbotConfigRepo,
+		caseScoringOutcomeRepo: caseScoringOutcomeRepo,
+		storage:                storage,
 	}
 }

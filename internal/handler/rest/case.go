@@ -288,6 +288,62 @@ func (r *Rest) UpsertCaseChatbotConfigByAdmin(c *gin.Context) {
 	response.Success(c, http.StatusOK, "case chatbot config saved", result)
 }
 
+func (r *Rest) GetCaseScoringOutcomeConfigByAdmin(c *gin.Context) {
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseVersionID, err := helper.ParseUUIDParam(c, "caseVersionID", "invalid case version id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.CaseService.GetCaseScoringOutcomeConfigByAdmin(caseID, caseVersionID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "case scoring outcome config retrieved", result)
+}
+
+func (r *Rest) UpsertCaseScoringOutcomeConfigByAdmin(c *gin.Context) {
+	adminUser, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseID, err := helper.ParseUUIDParam(c, "caseID", "invalid case id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	caseVersionID, err := helper.ParseUUIDParam(c, "caseVersionID", "invalid case version id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.AdminUpsertCaseScoringOutcomeConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid upsert case scoring outcome config request"))
+		return
+	}
+
+	result, err := r.service.CaseService.UpsertCaseScoringOutcomeConfigByAdmin(adminUser.UserID, caseID, caseVersionID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "case scoring outcome config saved", result)
+}
+
 func (r *Rest) GetCaseLookupsByAdmin(c *gin.Context) {
 	result, err := r.service.CaseService.GetCaseLookups()
 	if err != nil {

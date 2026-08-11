@@ -52,6 +52,21 @@ const (
 	CaseQuestionTypeOpenEnded           = "open_ended"
 	CaseQuestionTypeConfidenceSlider    = "confidence_slider"
 	CaseQuestionTypeClaimClassification = "claim_classification"
+
+	ScoringCategoryEvidenceEvaluation    = "evidence_evaluation"
+	ScoringCategoryClaimAnalysis         = "claim_analysis"
+	ScoringCategoryConfidenceCalibration = "confidence_calibration"
+	ScoringCategoryReasoning             = "reasoning"
+	ScoringCategorySafetyJudgment        = "safety_judgment"
+
+	OutcomeRuleExpert     = "expert"
+	OutcomeRuleDeveloping = "developing"
+	OutcomeRuleBeginner   = "beginner"
+
+	CityImpactHealth    = "health"
+	CityImpactTrust     = "trust"
+	CityImpactStability = "stability"
+	CityImpactWellbeing = "wellbeing"
 )
 
 type GetCaseParam struct {
@@ -237,4 +252,7 @@ type AdminCaseLookupsResponse struct {
 	DifficultyLevels  []CaseLookupOptionResponse `json:"difficulty_levels"`
 	RiskLevels        []CaseLookupOptionResponse `json:"risk_levels"`
 	GenerationSources []CaseLookupOptionResponse `json:"generation_sources"`
+	ScoringCategories []CaseLookupOptionResponse `json:"scoring_categories"`
+	OutcomeRules      []CaseLookupOptionResponse `json:"outcome_rules"`
+	CityImpacts       []CaseLookupOptionResponse `json:"city_impacts"`
 }
