@@ -8,13 +8,14 @@ import (
 )
 
 type Service struct {
-	UserService   IUserService
-	AuthService   IAuthService
-	RoleService   IRoleService
-	CaseService   ICaseService
-	AvatarService IAvatarService
-	ItemService   IItemService
-	RedeemService IRedeemService
+	UserService       IUserService
+	AuthService       IAuthService
+	RoleService       IRoleService
+	CaseService       ICaseService
+	AvatarService     IAvatarService
+	ItemService       IItemService
+	RedeemService     IRedeemService
+	GameConfigService IGameConfigService
 }
 
 func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtAuth jwt.Interface, supabase supabase.Interface) *Service {
@@ -25,14 +26,16 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 	avatarService := NewAvatarService(repository.AvatarRepository)
 	itemService := NewItemService(repository.ItemRepository, repository.ItemCategoryRepository, supabase)
 	redeemService := NewRedeemService(repository.RedeemItemRepository, repository.RedeemTypeRepository, supabase)
+	gameConfigService := NewGameConfigService(repository.GameConfigRepository, repository.GameLevelRepository)
 
 	return &Service{
-		UserService:   userService,
-		AuthService:   authService,
-		RoleService:   roleService,
-		CaseService:   caseService,
-		AvatarService: avatarService,
-		ItemService:   itemService,
-		RedeemService: redeemService,
+		UserService:       userService,
+		AuthService:       authService,
+		RoleService:       roleService,
+		CaseService:       caseService,
+		AvatarService:     avatarService,
+		ItemService:       itemService,
+		RedeemService:     redeemService,
+		GameConfigService: gameConfigService,
 	}
 }
