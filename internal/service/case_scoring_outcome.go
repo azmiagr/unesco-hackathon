@@ -119,6 +119,15 @@ func (s *CaseService) UpsertCaseScoringOutcomeConfigByAdmin(
 		return nil, appErrors.BadRequest("case version is not editable")
 	}
 
+	var before any
+	existingConfig, err := s.caseScoringOutcomeRepo.GetCaseScoringOutcomeConfig(tx, caseVersionID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, appErrors.InternalServer("failed to get case scoring outcome config")
+	}
+	if existingConfig != nil {
+		before = existingConfig
+	}
+
 	config := &entity.CaseScoringOutcomeConfig{
 		CaseVersionID: caseVersionID,
 	}
@@ -131,6 +140,21 @@ func (s *CaseService) UpsertCaseScoringOutcomeConfigByAdmin(
 	savedConfig, err := s.caseScoringOutcomeRepo.GetCaseScoringOutcomeConfig(tx, caseVersionID)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to get saved case scoring outcome config")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionConfigChange,
+		Module:        model.AuditModuleCMS,
+		TargetType:    "case_scoring_outcome_config",
+		TargetID:      caseVersionID.String(),
+		TargetLabel:   caseVersionID.String(),
+		Detail:        "Updated case scoring outcome config",
+		PayloadBefore: before,
+		PayloadAfter:  savedConfig,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

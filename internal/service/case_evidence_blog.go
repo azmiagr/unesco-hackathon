@@ -110,6 +110,11 @@ func (s *CaseService) CreateBlogEvidenceByAdmin(
 		return nil, appErrors.InternalServer("failed to create blog evidence")
 	}
 
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionCreate, evidence, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -178,6 +183,8 @@ func (s *CaseService) UpdateBlogEvidenceByAdmin(
 		return nil, err
 	}
 
+	before := newAuditCaseEvidenceSnapshot(evidence)
+
 	blog := evidence.Blog
 	if blog == nil {
 		blog = &entity.CaseEvidenceBlog{CaseEvidenceID: evidence.CaseEvidenceID}
@@ -202,6 +209,11 @@ func (s *CaseService) UpdateBlogEvidenceByAdmin(
 	err = s.caseEvidenceRepo.UpdateBlogEvidence(tx, blog)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to update blog evidence")
+	}
+
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionUpdate, evidence, before)
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

@@ -44,6 +44,7 @@ func Migrate(db *gorm.DB) error {
 		&entity.RegistrationSession{},
 		&entity.GameConfig{},
 		&entity.GameLevel{},
+		&entity.AuditLog{},
 	)
 
 	if err != nil {

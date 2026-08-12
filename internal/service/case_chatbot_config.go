@@ -89,12 +89,21 @@ func (s *CaseService) UpsertCaseChatbotConfigByAdmin(
 	tx := s.db.Begin()
 	defer tx.Rollback()
 
-	_, err = s.caseRepo.GetCaseForUpdate(tx, caseID)
+	caseEntity, err := s.caseRepo.GetCaseForUpdate(tx, caseID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, appErrors.NotFound("case not found")
 		}
 		return nil, appErrors.InternalServer("failed to get case")
+	}
+
+	var before any
+	existingConfig, err := s.caseChatbotConfigRepo.GetCaseChatbotConfig(tx, model.GetCaseChatbotConfigParam{CaseID: caseID})
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, appErrors.InternalServer("failed to get case chatbot config")
+	}
+	if existingConfig != nil {
+		before = existingConfig
 	}
 
 	config := &entity.CaseChatbotConfig{
@@ -116,6 +125,21 @@ func (s *CaseService) UpsertCaseChatbotConfigByAdmin(
 	})
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to get saved case chatbot config")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionConfigChange,
+		Module:        model.AuditModuleCMS,
+		TargetType:    "case_chatbot_config",
+		TargetID:      caseID.String(),
+		TargetLabel:   caseEntity.Title,
+		Detail:        "Updated case chatbot config",
+		PayloadBefore: before,
+		PayloadAfter:  savedConfig,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

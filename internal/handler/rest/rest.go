@@ -45,6 +45,7 @@ func (r *Rest) MountEndpoint() {
 	admin.GET("roles", r.GetAllRoles)
 	admin.GET("/item-categories", r.ListItemCategoriesByAdmin)
 	admin.GET("/redeem-types", r.ListRedeemTypesByAdmin)
+	admin.GET("/audit-logs", r.ListAuditLogsByAdmin)
 	admin.GET("/game-config/general", r.GetGameGeneralConfigByAdmin)
 	admin.GET("/game-config/ai", r.GetGameAIConfigByAdmin)
 	admin.POST("/users", r.CreateUserByAdmin)

@@ -144,6 +144,11 @@ func (s *CaseService) CreateChatTranscriptEvidenceByAdmin(
 		return nil, appErrors.InternalServer("failed to create chat transcript evidence")
 	}
 
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionCreate, evidence, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -248,6 +253,8 @@ func (s *CaseService) UpdateChatTranscriptEvidenceByAdmin(
 		return nil, err
 	}
 
+	before := newAuditCaseEvidenceSnapshot(evidence)
+
 	chatTranscript := evidence.ChatTranscript
 	if chatTranscript == nil {
 		chatTranscript = &entity.CaseEvidenceChatTranscript{CaseEvidenceID: evidence.CaseEvidenceID}
@@ -276,6 +283,11 @@ func (s *CaseService) UpdateChatTranscriptEvidenceByAdmin(
 	err = s.caseEvidenceRepo.ReplaceChatTranscriptMessages(tx, evidence.CaseEvidenceID, messageEntities)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to replace chat transcript messages")
+	}
+
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionUpdate, evidence, before)
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

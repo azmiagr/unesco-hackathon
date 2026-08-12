@@ -135,6 +135,11 @@ func (s *CaseService) CreateArticleEvidenceByAdmin(
 		return nil, appErrors.InternalServer("failed to create article evidence")
 	}
 
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionCreate, evidence, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -224,6 +229,8 @@ func (s *CaseService) UpdateArticleEvidenceByAdmin(
 		return nil, err
 	}
 
+	before := newAuditCaseEvidenceSnapshot(evidence)
+
 	article := evidence.Article
 	if article == nil {
 		article = &entity.CaseEvidenceArticle{CaseEvidenceID: evidence.CaseEvidenceID}
@@ -254,6 +261,11 @@ func (s *CaseService) UpdateArticleEvidenceByAdmin(
 	err = s.caseEvidenceRepo.UpdateArticleEvidence(tx, article)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to update article evidence")
+	}
+
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionUpdate, evidence, before)
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

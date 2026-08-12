@@ -93,14 +93,20 @@ func (r *Rest) HardDeleteUserByAdmin(c *gin.Context) {
 }
 
 func (r *Rest) CreateUserByAdmin(c *gin.Context) {
+	adminUser, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
 	var req model.AdminCreateUserRequest
-	err := c.ShouldBindJSON(&req)
+	err = c.ShouldBindJSON(&req)
 	if err != nil {
 		response.HandleError(c, errors.BadRequest("invalid create user request"))
 		return
 	}
 
-	result, err := r.service.UserService.CreateUserByAdmin(req)
+	result, err := r.service.UserService.CreateUserByAdmin(adminUser.UserID, req)
 	if err != nil {
 		response.HandleError(c, err)
 		return

@@ -130,6 +130,11 @@ func (s *CaseService) CreateForumThreadEvidenceByAdmin(
 		return nil, appErrors.InternalServer("failed to create forum thread evidence")
 	}
 
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionCreate, evidence, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -220,6 +225,8 @@ func (s *CaseService) UpdateForumThreadEvidenceByAdmin(
 		return nil, err
 	}
 
+	before := newAuditCaseEvidenceSnapshot(evidence)
+
 	forumThread := evidence.ForumThread
 	if forumThread == nil {
 		forumThread = &entity.CaseEvidenceForumThread{CaseEvidenceID: evidence.CaseEvidenceID}
@@ -246,6 +253,11 @@ func (s *CaseService) UpdateForumThreadEvidenceByAdmin(
 	err = s.caseEvidenceRepo.ReplaceForumThreadPosts(tx, evidence.CaseEvidenceID, posts)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to replace forum thread posts")
+	}
+
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionUpdate, evidence, before)
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

@@ -41,9 +41,16 @@ func (s *CaseService) DeleteCaseEvidenceByAdmin(
 		imageURL = evidence.Article.ImageURL
 	}
 
+	before := newAuditCaseEvidenceSnapshot(evidence)
+
 	err = s.caseEvidenceRepo.DeleteCaseEvidence(tx, evidence.CaseEvidenceID)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to delete case evidence")
+	}
+
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionDelete, evidence, before)
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

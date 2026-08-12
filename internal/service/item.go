@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"mime/multipart"
 	"strings"
@@ -42,18 +43,24 @@ type ItemService struct {
 	db               *gorm.DB
 	itemRepo         repository.IItemRepository
 	itemCategoryRepo repository.IItemCategoryRepository
+	userRepo         repository.IUserRepository
+	auditLogRepo     repository.IAuditLogRepository
 	storage          supabase.Interface
 }
 
 func NewItemService(
 	itemRepo repository.IItemRepository,
 	itemCategoryRepo repository.IItemCategoryRepository,
+	userRepo repository.IUserRepository,
+	auditLogRepo repository.IAuditLogRepository,
 	storage supabase.Interface,
 ) IItemService {
 	return &ItemService{
 		db:               mariadb.Connection,
 		itemRepo:         itemRepo,
 		itemCategoryRepo: itemCategoryRepo,
+		userRepo:         userRepo,
+		auditLogRepo:     auditLogRepo,
 		storage:          storage,
 	}
 }
@@ -243,6 +250,20 @@ func (s *ItemService) CreateItemByAdmin(
 		return nil, appErrors.InternalServer("failed to get created item")
 	}
 
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID: adminUserID,
+		ActionType:   model.AuditActionCreate,
+		Module:       model.AuditModuleShop,
+		TargetType:   "item",
+		TargetID:     item.ItemID.String(),
+		TargetLabel:  item.Name,
+		Detail:       fmt.Sprintf("Created shop item %s", item.Name),
+		PayloadAfter: newAuditItemSnapshot(savedItem),
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -317,6 +338,7 @@ func (s *ItemService) UpdateItemByAdmin(
 		return nil, appErrors.InternalServer("failed to get item")
 	}
 
+	before := newAuditItemSnapshot(item)
 	oldImageURL := item.ImageURL
 	item.ItemCategoryID = itemCategoryID
 	item.Name = name
@@ -341,6 +363,21 @@ func (s *ItemService) UpdateItemByAdmin(
 	savedItem, err := s.itemRepo.GetItem(tx, model.GetItemParam{ItemID: item.ItemID})
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to get updated item")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionUpdate,
+		Module:        model.AuditModuleShop,
+		TargetType:    "item",
+		TargetID:      item.ItemID.String(),
+		TargetLabel:   item.Name,
+		Detail:        fmt.Sprintf("Updated shop item %s", item.Name),
+		PayloadBefore: before,
+		PayloadAfter:  newAuditItemSnapshot(savedItem),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -385,9 +422,24 @@ func (s *ItemService) DeleteItemByAdmin(
 		return nil, appErrors.InternalServer("failed to get item")
 	}
 
+	before := newAuditItemSnapshot(item)
 	err = s.itemRepo.DeleteItem(tx, item.ItemID)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to delete item")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionDelete,
+		Module:        model.AuditModuleShop,
+		TargetType:    "item",
+		TargetID:      item.ItemID.String(),
+		TargetLabel:   item.Name,
+		Detail:        fmt.Sprintf("Deleted shop item %s", item.Name),
+		PayloadBefore: before,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

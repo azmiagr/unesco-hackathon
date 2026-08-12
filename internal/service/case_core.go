@@ -163,6 +163,24 @@ func (s *CaseService) CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCr
 		return nil, appErrors.InternalServer("failed to create case version")
 	}
 
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID: adminUserID,
+		ActionType:   model.AuditActionCreate,
+		Module:       model.AuditModuleCMS,
+		TargetType:   "case",
+		TargetID:     caseEntity.CaseID.String(),
+		TargetLabel:  caseEntity.Title,
+		Detail:       fmt.Sprintf("Created case %s", caseEntity.Title),
+		PayloadAfter: map[string]any{
+			"case":            newAuditCaseSnapshot(caseEntity),
+			"case_version_id": caseVersion.CaseVersionID,
+			"version_number":  caseVersion.VersionNumber,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -293,6 +311,8 @@ func (s *CaseService) UpdateCaseByAdmin(
 		return nil, appErrors.InternalServer("failed to get case")
 	}
 
+	before := newAuditCaseSnapshot(caseEntity)
+
 	slug, err := s.buildUniqueSlugForUpdate(caseEntity.CaseID, title)
 	if err != nil {
 		return nil, err
@@ -321,6 +341,21 @@ func (s *CaseService) UpdateCaseByAdmin(
 	err = s.caseRepo.UpdateCase(tx, caseEntity)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to update case")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionUpdate,
+		Module:        model.AuditModuleCMS,
+		TargetType:    "case",
+		TargetID:      caseEntity.CaseID.String(),
+		TargetLabel:   caseEntity.Title,
+		Detail:        fmt.Sprintf("Updated case %s", caseEntity.Title),
+		PayloadBefore: before,
+		PayloadAfter:  newAuditCaseSnapshot(caseEntity),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -383,6 +418,8 @@ func (s *CaseService) PublishCaseByAdmin(
 		return nil, appErrors.BadRequest("archived case version cannot be published")
 	}
 
+	before := newAuditCasePublishSnapshot(caseEntity, caseVersion)
+
 	requirements, err := s.buildPublishRequirements(tx, caseID, caseVersion.CaseVersionID)
 	if err != nil {
 		return nil, err
@@ -402,6 +439,21 @@ func (s *CaseService) PublishCaseByAdmin(
 	}
 	if err := s.caseVersionRepo.UpdateCaseVersion(tx, caseVersion); err != nil {
 		return nil, appErrors.InternalServer("failed to publish case version")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionUpdate,
+		Module:        model.AuditModuleCMS,
+		TargetType:    "case",
+		TargetID:      caseEntity.CaseID.String(),
+		TargetLabel:   caseEntity.Title,
+		Detail:        fmt.Sprintf("Published case %s", caseEntity.Title),
+		PayloadBefore: before,
+		PayloadAfter:  newAuditCasePublishSnapshot(caseEntity, caseVersion),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -438,10 +490,25 @@ func (s *CaseService) HardDeleteCaseByAdmin(adminUserID uuid.UUID, caseID uuid.U
 		return nil, appErrors.InternalServer("failed to get case")
 	}
 
+	before := newAuditCaseSnapshot(caseEntity)
 	thumbnailURL := caseEntity.ThumbnailURL
 	err = s.caseRepo.HardDeleteCase(tx, caseEntity.CaseID)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to delete case")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionDelete,
+		Module:        model.AuditModuleCMS,
+		TargetType:    "case",
+		TargetID:      caseEntity.CaseID.String(),
+		TargetLabel:   caseEntity.Title,
+		Detail:        fmt.Sprintf("Hard deleted case %s", caseEntity.Title),
+		PayloadBefore: before,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

@@ -316,6 +316,11 @@ func (s *CaseService) CreateMCQQuestionByAdmin(
 		return nil, appErrors.InternalServer("failed to create mcq question")
 	}
 
+	err = s.writeCaseQuestionAuditLog(tx, adminUserID, model.AuditActionCreate, question, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -449,6 +454,11 @@ func (s *CaseService) CreateOpenEndedQuestionByAdmin(
 	err = s.caseQuestionRepo.CreateOpenEndedQuestion(tx, question, openEndedDetail, evidenceReferences)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to create open ended question")
+	}
+
+	err = s.writeCaseQuestionAuditLog(tx, adminUserID, model.AuditActionCreate, question, nil)
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -604,6 +614,11 @@ func (s *CaseService) CreateConfidenceSliderQuestionByAdmin(
 		return nil, appErrors.InternalServer("failed to create confidence slider question")
 	}
 
+	err = s.writeCaseQuestionAuditLog(tx, adminUserID, model.AuditActionCreate, question, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -739,6 +754,11 @@ func (s *CaseService) CreateClaimClassificationQuestionByAdmin(
 		return nil, appErrors.InternalServer("failed to create claim classification question")
 	}
 
+	err = s.writeCaseQuestionAuditLog(tx, adminUserID, model.AuditActionCreate, question, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -832,6 +852,8 @@ func (s *CaseService) UpdateMCQQuestionByAdmin(
 		return nil, err
 	}
 
+	before := newAuditCaseQuestionSnapshot(question)
+
 	if err := s.validateQuestionEvidenceReferences(tx, caseVersionID, seenEvidenceIDs); err != nil {
 		return nil, err
 	}
@@ -850,6 +872,9 @@ func (s *CaseService) UpdateMCQQuestionByAdmin(
 	}
 	if err := s.caseQuestionRepo.ReplaceEvidenceReferences(tx, question.CaseQuestionID, evidenceReferences); err != nil {
 		return nil, appErrors.InternalServer("failed to replace question evidence references")
+	}
+	if err := s.writeCaseQuestionAuditLog(tx, adminUserID, model.AuditActionUpdate, question, before); err != nil {
+		return nil, err
 	}
 	if err := tx.Commit().Error; err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -909,6 +934,7 @@ func (s *CaseService) UpdateOpenEndedQuestionByAdmin(
 	if question.OpenEndedDetail == nil {
 		return nil, appErrors.InternalServer("open ended question detail not found")
 	}
+	before := newAuditCaseQuestionSnapshot(question)
 	if err := s.validateQuestionEvidenceReferences(tx, caseVersionID, seenEvidenceIDs); err != nil {
 		return nil, err
 	}
@@ -931,6 +957,9 @@ func (s *CaseService) UpdateOpenEndedQuestionByAdmin(
 	}
 	if err := s.caseQuestionRepo.ReplaceEvidenceReferences(tx, question.CaseQuestionID, evidenceReferences); err != nil {
 		return nil, appErrors.InternalServer("failed to replace question evidence references")
+	}
+	if err := s.writeCaseQuestionAuditLog(tx, adminUserID, model.AuditActionUpdate, question, before); err != nil {
+		return nil, err
 	}
 	if err := tx.Commit().Error; err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -1001,6 +1030,7 @@ func (s *CaseService) UpdateConfidenceSliderQuestionByAdmin(
 	if question.ConfidenceSliderDetail == nil {
 		return nil, appErrors.InternalServer("confidence slider question detail not found")
 	}
+	before := newAuditCaseQuestionSnapshot(question)
 
 	err = s.validateQuestionEvidenceReferences(tx, caseVersionID, seenEvidenceIDs)
 	if err != nil {
@@ -1033,6 +1063,11 @@ func (s *CaseService) UpdateConfidenceSliderQuestionByAdmin(
 	err = s.caseQuestionRepo.ReplaceEvidenceReferences(tx, question.CaseQuestionID, evidenceReferences)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to replace question evidence references")
+	}
+
+	err = s.writeCaseQuestionAuditLog(tx, adminUserID, model.AuditActionUpdate, question, before)
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -1095,6 +1130,7 @@ func (s *CaseService) UpdateClaimClassificationQuestionByAdmin(
 	if question.ClaimClassificationDetail == nil {
 		return nil, appErrors.InternalServer("claim classification question detail not found")
 	}
+	before := newAuditCaseQuestionSnapshot(question)
 	if err := s.validateQuestionEvidenceReferences(tx, caseVersionID, seenEvidenceIDs); err != nil {
 		return nil, err
 	}
@@ -1120,6 +1156,11 @@ func (s *CaseService) UpdateClaimClassificationQuestionByAdmin(
 	err = s.caseQuestionRepo.ReplaceEvidenceReferences(tx, question.CaseQuestionID, evidenceReferences)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to replace question evidence references")
+	}
+
+	err = s.writeCaseQuestionAuditLog(tx, adminUserID, model.AuditActionUpdate, question, before)
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -1155,9 +1196,16 @@ func (s *CaseService) DeleteCaseQuestionByAdmin(
 		return nil, err
 	}
 
+	before := newAuditCaseQuestionSnapshot(question)
+
 	err = s.caseQuestionRepo.DeleteCaseQuestion(tx, question.CaseQuestionID)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to delete case question")
+	}
+
+	err = s.writeCaseQuestionAuditLog(tx, adminUserID, model.AuditActionDelete, question, before)
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

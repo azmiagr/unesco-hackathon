@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"mime/multipart"
 	"strings"
@@ -48,18 +49,24 @@ type RedeemService struct {
 	db             *gorm.DB
 	redeemItemRepo repository.IRedeemItemRepository
 	redeemTypeRepo repository.IRedeemTypeRepository
+	userRepo       repository.IUserRepository
+	auditLogRepo   repository.IAuditLogRepository
 	storage        supabase.Interface
 }
 
 func NewRedeemService(
 	redeemItemRepo repository.IRedeemItemRepository,
 	redeemTypeRepo repository.IRedeemTypeRepository,
+	userRepo repository.IUserRepository,
+	auditLogRepo repository.IAuditLogRepository,
 	storage supabase.Interface,
 ) IRedeemService {
 	return &RedeemService{
 		db:             mariadb.Connection,
 		redeemItemRepo: redeemItemRepo,
 		redeemTypeRepo: redeemTypeRepo,
+		userRepo:       userRepo,
+		auditLogRepo:   auditLogRepo,
 		storage:        storage,
 	}
 }
@@ -252,6 +259,20 @@ func (s *RedeemService) CreateRedeemItemByAdmin(
 		return nil, appErrors.InternalServer("failed to get created redeem item")
 	}
 
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID: adminUserID,
+		ActionType:   model.AuditActionCreate,
+		Module:       model.AuditModuleShop,
+		TargetType:   "redeem_item",
+		TargetID:     redeemItem.RedeemItemID.String(),
+		TargetLabel:  redeemItem.Name,
+		Detail:       fmt.Sprintf("Created redeem item %s", redeemItem.Name),
+		PayloadAfter: newAuditRedeemItemSnapshot(savedRedeemItem),
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -327,6 +348,7 @@ func (s *RedeemService) UpdateRedeemItemByAdmin(
 		return nil, appErrors.InternalServer("failed to get redeem item")
 	}
 
+	before := newAuditRedeemItemSnapshot(redeemItem)
 	oldImageURL := redeemItem.ImageURL
 	redeemItem.RedeemTypeID = redeemType.RedeemTypeID
 	redeemItem.Name = payload.Name
@@ -352,6 +374,21 @@ func (s *RedeemService) UpdateRedeemItemByAdmin(
 	savedRedeemItem, err := s.redeemItemRepo.GetRedeemItem(tx, model.GetRedeemItemParam{RedeemItemID: redeemItem.RedeemItemID})
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to get updated redeem item")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionUpdate,
+		Module:        model.AuditModuleShop,
+		TargetType:    "redeem_item",
+		TargetID:      redeemItem.RedeemItemID.String(),
+		TargetLabel:   redeemItem.Name,
+		Detail:        fmt.Sprintf("Updated redeem item %s", redeemItem.Name),
+		PayloadBefore: before,
+		PayloadAfter:  newAuditRedeemItemSnapshot(savedRedeemItem),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -396,9 +433,24 @@ func (s *RedeemService) DeleteRedeemItemByAdmin(
 		return nil, appErrors.InternalServer("failed to get redeem item")
 	}
 
+	before := newAuditRedeemItemSnapshot(redeemItem)
 	err = s.redeemItemRepo.DeleteRedeemItem(tx, redeemItem.RedeemItemID)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to delete redeem item")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionDelete,
+		Module:        model.AuditModuleShop,
+		TargetType:    "redeem_item",
+		TargetID:      redeemItem.RedeemItemID.String(),
+		TargetLabel:   redeemItem.Name,
+		Detail:        fmt.Sprintf("Deleted redeem item %s", redeemItem.Name),
+		PayloadBefore: before,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

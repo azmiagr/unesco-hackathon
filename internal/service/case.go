@@ -109,6 +109,8 @@ type CaseService struct {
 	caseQuestionRepo       repository.ICaseQuestionRepository
 	caseChatbotConfigRepo  repository.ICaseChatbotConfigRepository
 	caseScoringOutcomeRepo repository.ICaseScoringOutcomeRepository
+	userRepo               repository.IUserRepository
+	auditLogRepo           repository.IAuditLogRepository
 	storage                supabase.Interface
 }
 
@@ -119,6 +121,8 @@ func NewCaseService(
 	caseQuestionRepo repository.ICaseQuestionRepository,
 	caseChatbotConfigRepo repository.ICaseChatbotConfigRepository,
 	caseScoringOutcomeRepo repository.ICaseScoringOutcomeRepository,
+	userRepo repository.IUserRepository,
+	auditLogRepo repository.IAuditLogRepository,
 	storage supabase.Interface,
 ) ICaseService {
 	return &CaseService{
@@ -129,6 +133,8 @@ func NewCaseService(
 		caseQuestionRepo:       caseQuestionRepo,
 		caseChatbotConfigRepo:  caseChatbotConfigRepo,
 		caseScoringOutcomeRepo: caseScoringOutcomeRepo,
+		userRepo:               userRepo,
+		auditLogRepo:           auditLogRepo,
 		storage:                storage,
 	}
 }

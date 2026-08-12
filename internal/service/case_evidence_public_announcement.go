@@ -104,6 +104,11 @@ func (s *CaseService) CreatePublicAnnouncementEvidenceByAdmin(
 		return nil, appErrors.InternalServer("failed to create public announcement evidence")
 	}
 
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionCreate, evidence, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -168,6 +173,8 @@ func (s *CaseService) UpdatePublicAnnouncementEvidenceByAdmin(
 		return nil, err
 	}
 
+	before := newAuditCaseEvidenceSnapshot(evidence)
+
 	publicAnnouncement := evidence.PublicAnnouncement
 	if publicAnnouncement == nil {
 		publicAnnouncement = &entity.CaseEvidencePublicAnnouncement{CaseEvidenceID: evidence.CaseEvidenceID}
@@ -191,6 +198,11 @@ func (s *CaseService) UpdatePublicAnnouncementEvidenceByAdmin(
 	err = s.caseEvidenceRepo.UpdatePublicAnnouncementEvidence(tx, publicAnnouncement)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to update public announcement evidence")
+	}
+
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionUpdate, evidence, before)
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

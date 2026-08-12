@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 
@@ -38,16 +39,22 @@ type GameConfigService struct {
 	db             *gorm.DB
 	gameConfigRepo repository.IGameConfigRepository
 	gameLevelRepo  repository.IGameLevelRepository
+	userRepo       repository.IUserRepository
+	auditLogRepo   repository.IAuditLogRepository
 }
 
 func NewGameConfigService(
 	gameConfigRepo repository.IGameConfigRepository,
 	gameLevelRepo repository.IGameLevelRepository,
+	userRepo repository.IUserRepository,
+	auditLogRepo repository.IAuditLogRepository,
 ) IGameConfigService {
 	return &GameConfigService{
 		db:             mariadb.Connection,
 		gameConfigRepo: gameConfigRepo,
 		gameLevelRepo:  gameLevelRepo,
+		userRepo:       userRepo,
+		auditLogRepo:   auditLogRepo,
 	}
 }
 
@@ -86,6 +93,17 @@ func (s *GameConfigService) UpsertGameConfigByAdmin(
 	tx := s.db.Begin()
 	defer tx.Rollback()
 
+	var before any
+	existingConfig, err := s.gameConfigRepo.GetGameConfigForUpdate(tx, model.GetGameConfigParam{
+		ConfigKey: model.GameConfigDefaultKey,
+	})
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, appErrors.InternalServer("failed to get game config")
+	}
+	if existingConfig != nil {
+		before = newAuditGameConfigSnapshot(existingConfig)
+	}
+
 	config := &entity.GameConfig{
 		GameConfigID:                uuid.New(),
 		ConfigKey:                   model.GameConfigDefaultKey,
@@ -118,6 +136,21 @@ func (s *GameConfigService) UpsertGameConfigByAdmin(
 	})
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to get saved game config")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionConfigChange,
+		Module:        model.AuditModuleConfig,
+		TargetType:    "game_config",
+		TargetID:      savedConfig.GameConfigID.String(),
+		TargetLabel:   savedConfig.ConfigKey,
+		Detail:        "Updated game config",
+		PayloadBefore: before,
+		PayloadAfter:  newAuditGameConfigSnapshot(savedConfig),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -169,6 +202,8 @@ func (s *GameConfigService) UpsertGameGeneralConfigByAdmin(
 		return nil, err
 	}
 
+	before := newAuditGameConfigSnapshot(config)
+
 	config.MaxCasesPerDay = req.MaxCasesPerDay
 	config.CooldownBetweenCasesMinutes = req.CooldownBetweenCasesMinutes
 	config.StreakBonusMultiplier = req.StreakBonusMultiplier
@@ -177,6 +212,21 @@ func (s *GameConfigService) UpsertGameGeneralConfigByAdmin(
 	err = s.gameConfigRepo.UpdateGameConfig(tx, config)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to save game general config")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionConfigChange,
+		Module:        model.AuditModuleConfig,
+		TargetType:    "game_config",
+		TargetID:      config.GameConfigID.String(),
+		TargetLabel:   config.ConfigKey,
+		Detail:        "Updated game general config",
+		PayloadBefore: before,
+		PayloadAfter:  newAuditGameConfigSnapshot(config),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -228,6 +278,8 @@ func (s *GameConfigService) UpsertGameAIConfigByAdmin(
 		return nil, err
 	}
 
+	before := newAuditGameConfigSnapshot(config)
+
 	config.DefaultAIProvider = strings.TrimSpace(req.DefaultAIProvider)
 	if secret := normalizeOptionalSecret(req.OpenAIAPISecretKey); secret != nil {
 		config.OpenAIAPISecretKey = secret
@@ -243,6 +295,21 @@ func (s *GameConfigService) UpsertGameAIConfigByAdmin(
 	err = s.gameConfigRepo.UpdateGameConfig(tx, config)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to save game ai config")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionConfigChange,
+		Module:        model.AuditModuleConfig,
+		TargetType:    "game_config",
+		TargetID:      config.GameConfigID.String(),
+		TargetLabel:   config.ConfigKey,
+		Detail:        "Updated game AI config",
+		PayloadBefore: before,
+		PayloadAfter:  newAuditGameConfigSnapshot(config),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -346,6 +413,20 @@ func (s *GameConfigService) CreateGameLevelByAdmin(
 		return nil, appErrors.InternalServer("failed to create game level")
 	}
 
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID: adminUserID,
+		ActionType:   model.AuditActionCreate,
+		Module:       model.AuditModuleConfig,
+		TargetType:   "game_level",
+		TargetID:     level.GameLevelID.String(),
+		TargetLabel:  level.Title,
+		Detail:       fmt.Sprintf("Created game level %s", level.Title),
+		PayloadAfter: newAuditGameLevelSnapshot(level),
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -384,6 +465,8 @@ func (s *GameConfigService) UpdateGameLevelByAdmin(
 		return nil, appErrors.InternalServer("failed to get game level")
 	}
 
+	before := newAuditGameLevelSnapshot(level)
+
 	level.Level = req.Level
 	level.XPRequired = req.XPRequired
 	level.Title = title
@@ -392,6 +475,21 @@ func (s *GameConfigService) UpdateGameLevelByAdmin(
 	err = s.gameLevelRepo.UpdateGameLevel(tx, level)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to update game level")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionUpdate,
+		Module:        model.AuditModuleConfig,
+		TargetType:    "game_level",
+		TargetID:      level.GameLevelID.String(),
+		TargetLabel:   level.Title,
+		Detail:        fmt.Sprintf("Updated game level %s", level.Title),
+		PayloadBefore: before,
+		PayloadAfter:  newAuditGameLevelSnapshot(level),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -426,9 +524,25 @@ func (s *GameConfigService) DeleteGameLevelByAdmin(
 		return nil, appErrors.InternalServer("failed to get game level")
 	}
 
+	before := newAuditGameLevelSnapshot(level)
+
 	err = s.gameLevelRepo.DeleteGameLevel(tx, level.GameLevelID)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to delete game level")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionDelete,
+		Module:        model.AuditModuleConfig,
+		TargetType:    "game_level",
+		TargetID:      level.GameLevelID.String(),
+		TargetLabel:   level.Title,
+		Detail:        fmt.Sprintf("Deleted game level %s", level.Title),
+		PayloadBefore: before,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

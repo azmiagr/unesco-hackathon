@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 
@@ -41,7 +42,7 @@ type IUserService interface {
 	GetUserDetail(userID uuid.UUID) (*model.AdminUserDetailResponse, error)
 	UpdateUserAccess(adminUserID uuid.UUID, targetUserID uuid.UUID, req model.AdminUpdateUserAccessRequest) (*model.AdminUpdateUserAccessResponse, error)
 	HardDeleteUser(adminUserID uuid.UUID, targetUserID uuid.UUID) (*model.AdminDeleteUserResponse, error)
-	CreateUserByAdmin(req model.AdminCreateUserRequest) (*model.AdminCreateUserResponse, error)
+	CreateUserByAdmin(adminUserID uuid.UUID, req model.AdminCreateUserRequest) (*model.AdminCreateUserResponse, error)
 	UpdateUserByAdmin(adminUserID uuid.UUID, targetUserID uuid.UUID, req model.AdminUpdateUserRequest) (*model.AdminUpdateUserResponse, error)
 }
 
@@ -50,6 +51,7 @@ type UserService struct {
 	userRepo        repository.IUserRepository
 	roleRepo        repository.IRoleRepository
 	userProfileRepo repository.IUserProfileRepository
+	auditLogRepo    repository.IAuditLogRepository
 	bcrypt          bcrypt.Interface
 }
 
@@ -57,6 +59,7 @@ func NewUserService(
 	userRepo repository.IUserRepository,
 	roleRepo repository.IRoleRepository,
 	userProfileRepo repository.IUserProfileRepository,
+	auditLogRepo repository.IAuditLogRepository,
 	bcrypt bcrypt.Interface,
 ) IUserService {
 	return &UserService{
@@ -64,6 +67,7 @@ func NewUserService(
 		userRepo:        userRepo,
 		roleRepo:        roleRepo,
 		userProfileRepo: userProfileRepo,
+		auditLogRepo:    auditLogRepo,
 		bcrypt:          bcrypt,
 	}
 }
@@ -195,6 +199,12 @@ func (s *UserService) UpdateUserAccess(adminUserID uuid.UUID, targetUserID uuid.
 		return nil, appErrors.InternalServer("failed to get user")
 	}
 
+	currentRole, err := s.roleRepo.GetRole(tx, user.RoleID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get current role")
+	}
+	before := newAuditUserSnapshot(user, currentRole.RoleName)
+
 	roleID := uuid.Nil
 	finalRoleName := ""
 	if roleName != "" {
@@ -209,11 +219,7 @@ func (s *UserService) UpdateUserAccess(adminUserID uuid.UUID, targetUserID uuid.
 		roleID = role.RoleID
 		finalRoleName = role.RoleName
 	} else {
-		role, err := s.roleRepo.GetRole(tx, user.RoleID)
-		if err != nil {
-			return nil, appErrors.InternalServer("failed to get current role")
-		}
-		finalRoleName = role.RoleName
+		finalRoleName = currentRole.RoleName
 	}
 
 	finalStatus := user.Status
@@ -228,6 +234,33 @@ func (s *UserService) UpdateUserAccess(adminUserID uuid.UUID, targetUserID uuid.
 	})
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to update user access")
+	}
+
+	after := auditUserSnapshot{
+		UserID:   user.UserID,
+		RoleID:   user.RoleID,
+		RoleName: finalRoleName,
+		Username: user.Username,
+		Email:    user.Email,
+		Status:   finalStatus,
+	}
+	if roleID != uuid.Nil {
+		after.RoleID = roleID
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionUpdate,
+		Module:        model.AuditModuleUsers,
+		TargetType:    "user",
+		TargetID:      user.UserID.String(),
+		TargetLabel:   user.Email,
+		Detail:        fmt.Sprintf("Updated user access for %s", user.Email),
+		PayloadBefore: before,
+		PayloadAfter:  after,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -262,9 +295,29 @@ func (s *UserService) HardDeleteUser(adminUserID uuid.UUID, targetUserID uuid.UU
 		return nil, appErrors.InternalServer("failed to get user")
 	}
 
+	role, err := s.roleRepo.GetRole(tx, user.RoleID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get current role")
+	}
+	before := newAuditUserSnapshot(user, role.RoleName)
+
 	err = s.userRepo.HardDeleteUser(tx, user.UserID)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to delete user")
+	}
+
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionDelete,
+		Module:        model.AuditModuleUsers,
+		TargetType:    "user",
+		TargetID:      user.UserID.String(),
+		TargetLabel:   user.Email,
+		Detail:        fmt.Sprintf("Hard deleted user %s", user.Email),
+		PayloadBefore: before,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
@@ -278,7 +331,11 @@ func (s *UserService) HardDeleteUser(adminUserID uuid.UUID, targetUserID uuid.UU
 
 }
 
-func (s *UserService) CreateUserByAdmin(req model.AdminCreateUserRequest) (*model.AdminCreateUserResponse, error) {
+func (s *UserService) CreateUserByAdmin(adminUserID uuid.UUID, req model.AdminCreateUserRequest) (*model.AdminCreateUserResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
 	roleName := strings.ToLower(strings.TrimSpace(req.RoleName))
 	status := strings.ToLower(strings.TrimSpace(req.Status))
 
@@ -369,6 +426,20 @@ func (s *UserService) CreateUserByAdmin(req model.AdminCreateUserRequest) (*mode
 		return nil, appErrors.InternalServer("failed to create user profile")
 	}
 
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID: adminUserID,
+		ActionType:   model.AuditActionCreate,
+		Module:       model.AuditModuleUsers,
+		TargetType:   "user",
+		TargetID:     user.UserID.String(),
+		TargetLabel:  user.Email,
+		Detail:       fmt.Sprintf("Created user %s", user.Email),
+		PayloadAfter: newAuditUserSnapshot(user, role.RoleName),
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -440,6 +511,12 @@ func (s *UserService) UpdateUserByAdmin(adminUserID uuid.UUID, targetUserID uuid
 		return nil, appErrors.InternalServer("failed to get user")
 	}
 
+	currentRole, err := s.roleRepo.GetRole(tx, user.RoleID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get current role")
+	}
+	before := newAuditUserSnapshot(user, currentRole.RoleName)
+
 	if user.Email != email {
 		emailExists, err := s.userRepo.UserExists(tx, model.GetUserParam{
 			Email: email,
@@ -488,6 +565,25 @@ func (s *UserService) UpdateUserByAdmin(adminUserID uuid.UUID, targetUserID uuid
 	err = s.userRepo.UpdateUser(tx, user)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to update user")
+	}
+
+	after := newAuditUserSnapshot(user, role.RoleName)
+	err = writeAdminAuditLog(tx, s.auditLogRepo, s.userRepo, adminAuditLogParam{
+		ActorAdminID:  adminUserID,
+		ActionType:    model.AuditActionUpdate,
+		Module:        model.AuditModuleUsers,
+		TargetType:    "user",
+		TargetID:      user.UserID.String(),
+		TargetLabel:   user.Email,
+		Detail:        fmt.Sprintf("Updated user %s", user.Email),
+		PayloadBefore: before,
+		PayloadAfter: map[string]any{
+			"user":             after,
+			"password_changed": password != "",
+		},
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error

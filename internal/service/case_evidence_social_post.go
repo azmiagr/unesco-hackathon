@@ -137,6 +137,11 @@ func (s *CaseService) CreateSocialPostEvidenceByAdmin(
 		return nil, appErrors.InternalServer("failed to create social post evidence")
 	}
 
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionCreate, evidence, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to commit transaction")
@@ -221,6 +226,8 @@ func (s *CaseService) UpdateSocialPostEvidenceByAdmin(
 		return nil, err
 	}
 
+	before := newAuditCaseEvidenceSnapshot(evidence)
+
 	socialPost := evidence.SocialPost
 	if socialPost == nil {
 		socialPost = &entity.CaseEvidenceSocialPost{
@@ -256,6 +263,11 @@ func (s *CaseService) UpdateSocialPostEvidenceByAdmin(
 	err = s.caseEvidenceRepo.UpdateSocialPostEvidence(tx, socialPost)
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to update social post evidence")
+	}
+
+	err = s.writeCaseEvidenceAuditLog(tx, adminUserID, model.AuditActionUpdate, evidence, before)
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit().Error
