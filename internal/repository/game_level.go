@@ -15,6 +15,7 @@ type IGameLevelRepository interface {
 	ListGameLevels(tx *gorm.DB, param model.ListGameLevelsParam) ([]entity.GameLevel, int64, error)
 	UpdateGameLevel(tx *gorm.DB, level *entity.GameLevel) error
 	DeleteGameLevel(tx *gorm.DB, gameLevelID uuid.UUID) error
+	GetNextGameLevel(tx *gorm.DB, currentLevel int) (*entity.GameLevel, error)
 }
 
 type GameLevelRepository struct {
@@ -110,4 +111,18 @@ func (r *GameLevelRepository) DeleteGameLevel(tx *gorm.DB, gameLevelID uuid.UUID
 	}
 
 	return nil
+}
+
+func (r *GameLevelRepository) GetNextGameLevel(tx *gorm.DB, currentLevel int) (*entity.GameLevel, error) {
+	var level entity.GameLevel
+
+	err := tx.Model(&entity.GameLevel{}).
+		Where("level > ?", currentLevel).
+		Order("level ASC").
+		First(&level).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &level, nil
 }

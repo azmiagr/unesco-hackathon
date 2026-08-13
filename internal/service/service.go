@@ -18,6 +18,7 @@ type Service struct {
 	GameConfigService  IGameConfigService
 	AuditLogService    IAuditLogService
 	LeaderboardService ILeaderboardService
+	ProfileService     IProfileService
 }
 
 func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtAuth jwt.Interface, supabase supabase.Interface) *Service {
@@ -31,6 +32,7 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 	gameConfigService := NewGameConfigService(repository.GameConfigRepository, repository.GameLevelRepository, repository.UserRepository, repository.AuditLogRepository)
 	auditLogService := NewAuditLogService(repository.AuditLogRepository)
 	leaderboardService := NewLeaderboardService(repository.UserProfileRepository)
+	profileService := NewProfileService(repository.UserProfileRepository, repository.GameLevelRepository)
 
 	return &Service{
 		UserService:        userService,
@@ -43,5 +45,6 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 		GameConfigService:  gameConfigService,
 		AuditLogService:    auditLogService,
 		LeaderboardService: leaderboardService,
+		ProfileService:     profileService,
 	}
 }

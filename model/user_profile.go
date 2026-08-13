@@ -6,3 +6,84 @@ type GetUserProfileParam struct {
 	UserProfileID uuid.UUID `json:"-"`
 	UserID        uuid.UUID `json:"-"`
 }
+
+type UserProfileDetailRow struct {
+	UserID                     uuid.UUID  `json:"user_id"`
+	Username                   string     `json:"username"`
+	Email                      string     `json:"email"`
+	UserProfileID              uuid.UUID  `json:"user_profile_id"`
+	AvatarID                   *uuid.UUID `json:"avatar_id"`
+	AvatarURL                  string     `json:"avatar_url"`
+	Title                      string     `json:"title"`
+	CurrentLevel               int        `json:"current_level"`
+	CurrentXP                  int        `json:"current_xp"`
+	AuditorReputation          float64    `json:"auditor_reputation"`
+	EvidenceEvaluationScore    float64    `json:"evidence_evaluation_score"`
+	ClaimAnalysisScore         float64    `json:"claim_analysis_score"`
+	ConfidenceCalibrationScore float64    `json:"confidence_calibration_score"`
+	ReasoningScore             float64    `json:"reasoning_score"`
+	SafetyJudgmentScore        float64    `json:"safety_judgment_score"`
+}
+
+type UserProfileSummaryResponse struct {
+	UserID            uuid.UUID  `json:"user_id"`
+	Username          string     `json:"username"`
+	Email             string     `json:"email"`
+	AvatarID          *uuid.UUID `json:"avatar_id"`
+	AvatarURL         string     `json:"avatar_url"`
+	Title             string     `json:"title"`
+	CurrentLevel      int        `json:"current_level"`
+	CurrentXP         int        `json:"current_xp"`
+	AuditorReputation float64    `json:"auditor_reputation"`
+	AccuracyPercent   float64    `json:"accuracy_percent"`
+	CasesCompleted    int        `json:"cases_completed"`
+	StreakCount       int        `json:"streak_count"`
+	SeasonLabel       string     `json:"season_label"`
+}
+
+type UserProfileLevelProgressResponse struct {
+	CurrentLevel    int    `json:"current_level"`
+	NextLevel       int    `json:"next_level"`
+	CurrentXP       int    `json:"current_xp"`
+	NextLevelXP     int    `json:"next_level_xp"`
+	RemainingXP     int    `json:"remaining_xp"`
+	ProgressXP      int    `json:"progress_xp"`
+	ProgressPercent int    `json:"progress_percent"`
+	NextUnlockText  string `json:"next_unlock_text"`
+}
+
+type UserProfileDetectiveStatResponse struct {
+	Key     string  `json:"key"`
+	Label   string  `json:"label"`
+	Score   float64 `json:"score"`
+	Average float64 `json:"average"`
+}
+
+type UserProfileAccountResponse struct {
+	Email           string `json:"email"`
+	IsEmailVerified bool   `json:"is_email_verified"`
+	ConnectedTo     string `json:"connected_to"`
+}
+
+type UserCaseHistoryItemResponse struct {
+	CaseID          uuid.UUID `json:"case_id"`
+	Title           string    `json:"title"`
+	CompletedAt     string    `json:"completed_at"`
+	DifficultyLabel string    `json:"difficulty_label"`
+	XPReward        int       `json:"xp_reward"`
+	ResultStatus    string    `json:"result_status"`
+	ScoreLabel      string    `json:"score_label"`
+	IsRetryable     bool      `json:"is_retryable"`
+}
+
+type UserCaseHistoryResponse struct {
+	Items []UserCaseHistoryItemResponse `json:"items"`
+}
+
+type GetUserProfileResponse struct {
+	Profile       UserProfileSummaryResponse         `json:"profile"`
+	LevelProgress UserProfileLevelProgressResponse   `json:"level_progress"`
+	Stats         []UserProfileDetectiveStatResponse `json:"stats"`
+	Account       UserProfileAccountResponse         `json:"account"`
+	CaseHistory   UserCaseHistoryResponse            `json:"case_history"`
+}

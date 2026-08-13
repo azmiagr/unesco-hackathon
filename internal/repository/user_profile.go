@@ -13,6 +13,7 @@ type IUserProfileRepository interface {
 	UpdateUserProfile(tx *gorm.DB, userProfile *entity.UserProfile) error
 	ListLeaderboard(tx *gorm.DB, param model.ListLeaderboardParam) ([]model.LeaderboardEntryRow, int64, error)
 	GetUserLeaderboardRank(tx *gorm.DB, userID uuid.UUID) (*model.LeaderboardEntryRow, error)
+	GetUserProfileDetail(tx *gorm.DB, userID uuid.UUID) (*model.UserProfileDetailRow, error)
 }
 
 type UserProfileRepository struct {
@@ -116,4 +117,39 @@ func (r *UserProfileRepository) GetUserLeaderboardRank(tx *gorm.DB, userID uuid.
 	}
 
 	return &entry, nil
+}
+
+func (r *UserProfileRepository) GetUserProfileDetail(tx *gorm.DB, userID uuid.UUID) (*model.UserProfileDetailRow, error) {
+	var profile model.UserProfileDetailRow
+
+	err := tx.Table("users").
+		Joins("JOIN user_profiles ON user_profiles.user_id = users.user_id").
+		Joins("LEFT JOIN avatars ON avatars.avatar_id = user_profiles.avatar_id").
+		Where("users.user_id = ?", userID).
+		Select(`
+			users.user_id,
+			users.username,
+			users.email,
+			user_profiles.user_profile_id,
+			user_profiles.avatar_id,
+			COALESCE(avatars.image_url, '') AS avatar_url,
+			COALESCE(user_profiles.title, '') AS title,
+			COALESCE(user_profiles.current_level, 0) AS current_level,
+			COALESCE(user_profiles.current_xp, 0) AS current_xp,
+			COALESCE(user_profiles.auditor_reputation, 0) AS auditor_reputation,
+			COALESCE(user_profiles.evidence_evaluation_score, 0) AS evidence_evaluation_score,
+			COALESCE(user_profiles.claim_analysis_score, 0) AS claim_analysis_score,
+			COALESCE(user_profiles.confidence_calibration_score, 0) AS confidence_calibration_score,
+			COALESCE(user_profiles.reasoning_score, 0) AS reasoning_score,
+			COALESCE(user_profiles.safety_judgment_score, 0) AS safety_judgment_score
+		`).
+		Scan(&profile).Error
+	if err != nil {
+		return nil, err
+	}
+	if profile.UserID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	return &profile, nil
 }
