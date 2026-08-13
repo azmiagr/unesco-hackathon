@@ -8,15 +8,16 @@ import (
 )
 
 type Service struct {
-	UserService       IUserService
-	AuthService       IAuthService
-	RoleService       IRoleService
-	CaseService       ICaseService
-	AvatarService     IAvatarService
-	ItemService       IItemService
-	RedeemService     IRedeemService
-	GameConfigService IGameConfigService
-	AuditLogService   IAuditLogService
+	UserService        IUserService
+	AuthService        IAuthService
+	RoleService        IRoleService
+	CaseService        ICaseService
+	AvatarService      IAvatarService
+	ItemService        IItemService
+	RedeemService      IRedeemService
+	GameConfigService  IGameConfigService
+	AuditLogService    IAuditLogService
+	LeaderboardService ILeaderboardService
 }
 
 func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtAuth jwt.Interface, supabase supabase.Interface) *Service {
@@ -29,16 +30,18 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 	redeemService := NewRedeemService(repository.RedeemItemRepository, repository.RedeemTypeRepository, repository.UserRepository, repository.AuditLogRepository, supabase)
 	gameConfigService := NewGameConfigService(repository.GameConfigRepository, repository.GameLevelRepository, repository.UserRepository, repository.AuditLogRepository)
 	auditLogService := NewAuditLogService(repository.AuditLogRepository)
+	leaderboardService := NewLeaderboardService(repository.UserProfileRepository)
 
 	return &Service{
-		UserService:       userService,
-		AuthService:       authService,
-		RoleService:       roleService,
-		CaseService:       caseService,
-		AvatarService:     avatarService,
-		ItemService:       itemService,
-		RedeemService:     redeemService,
-		GameConfigService: gameConfigService,
-		AuditLogService:   auditLogService,
+		UserService:        userService,
+		AuthService:        authService,
+		RoleService:        roleService,
+		CaseService:        caseService,
+		AvatarService:      avatarService,
+		ItemService:        itemService,
+		RedeemService:      redeemService,
+		GameConfigService:  gameConfigService,
+		AuditLogService:    auditLogService,
+		LeaderboardService: leaderboardService,
 	}
 }
