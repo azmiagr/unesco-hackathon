@@ -10,6 +10,7 @@ import (
 type Item struct {
 	ItemID         uuid.UUID      `json:"item_id" gorm:"type:varchar(36);primaryKey"`
 	ItemCategoryID uuid.UUID      `json:"item_category_id" gorm:"type:varchar(36);not null;index"`
+	AvatarID       *uuid.UUID     `json:"avatar_id" gorm:"type:varchar(36);index"`
 	Name           string         `json:"name" gorm:"type:varchar(150);not null"`
 	Description    string         `json:"description" gorm:"type:text;not null"`
 	PriceCoin      int            `json:"price_coin" gorm:"type:int;not null;default:0"`
@@ -20,4 +21,6 @@ type Item struct {
 	CreatedAt      time.Time      `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt      time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
 	DeletedAt      gorm.DeletedAt `json:"deleted_at" gorm:"index"`
+
+	UserItems []UserItem `gorm:"foreignKey:ItemID;references:ItemID;constraint:onDelete:CASCADE"`
 }

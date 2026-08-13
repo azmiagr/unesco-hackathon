@@ -15,4 +15,5 @@ type Avatar struct {
 	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 
 	UserProfiles []UserProfile `gorm:"foreignKey:AvatarID;references:AvatarID;constraint:onDelete:CASCADE"`
+	Items        []Item        `gorm:"foreignKey:AvatarID;references:AvatarID;constraint:onDelete:CASCADE"`
 }

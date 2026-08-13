@@ -13,6 +13,10 @@ const (
 	ItemStatusActive   = "active"
 	ItemStatusInactive = "inactive"
 	ItemStatusRetired  = "retired"
+
+	UserShopItemOwnershipNotOwned = "not_owned"
+	UserShopItemOwnershipOwned    = "owned"
+	UserShopItemOwnershipEquipped = "equipped"
 )
 
 type GetItemCategoryParam struct {
@@ -28,6 +32,11 @@ type GetItemParam struct {
 	ItemID uuid.UUID
 }
 
+type GetUserItemParam struct {
+	UserID uuid.UUID
+	ItemID uuid.UUID
+}
+
 type ListItemsParam struct {
 	Search         string
 	ItemCategoryID uuid.UUID
@@ -37,6 +46,15 @@ type ListItemsParam struct {
 	IsFeatured     *bool
 	Limit          int
 	Offset         int
+}
+
+type ListVisibleShopItemsParam struct {
+	UserID       uuid.UUID
+	ItemID       uuid.UUID
+	Search       string
+	CategoryCode string
+	Limit        int
+	Offset       int
 }
 
 type AdminListItemsRequest struct {
@@ -50,9 +68,17 @@ type AdminListItemsRequest struct {
 	Limit          int    `form:"limit"`
 }
 
+type UserListShopItemsRequest struct {
+	Search       string `form:"search"`
+	CategoryCode string `form:"category_code"`
+	Page         int    `form:"page"`
+	Limit        int    `form:"limit"`
+}
+
 type AdminCreateItemRequest struct {
 	Name           string                `form:"name" binding:"required"`
 	ItemCategoryID string                `form:"item_category_id" binding:"required"`
+	AvatarID       string                `form:"avatar_id"`
 	Description    string                `form:"description" binding:"required"`
 	PriceCoin      int                   `form:"price_coin" binding:"required"`
 	IsVisible      *bool                 `form:"is_visible"`
@@ -64,6 +90,7 @@ type AdminCreateItemRequest struct {
 type AdminUpdateItemRequest struct {
 	Name           string                `form:"name" binding:"required"`
 	ItemCategoryID string                `form:"item_category_id" binding:"required"`
+	AvatarID       string                `form:"avatar_id"`
 	Description    string                `form:"description" binding:"required"`
 	PriceCoin      int                   `form:"price_coin" binding:"required"`
 	IsVisible      *bool                 `form:"is_visible"`
@@ -81,6 +108,39 @@ type AdminItemCategoryResponse struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
+type UserShopItemRow struct {
+	ItemID          uuid.UUID  `json:"item_id"`
+	ItemCategoryID  uuid.UUID  `json:"item_category_id"`
+	CategoryCode    string     `json:"category_code"`
+	CategoryName    string     `json:"category_name"`
+	AvatarID        *uuid.UUID `json:"avatar_id"`
+	Name            string     `json:"name"`
+	Description     string     `json:"description"`
+	PriceCoin       int        `json:"price_coin"`
+	ImageURL        string     `json:"image_url"`
+	UserItemID      *uuid.UUID `json:"user_item_id"`
+	EquippedAt      *time.Time `json:"equipped_at"`
+	CurrentAvatarID *uuid.UUID `json:"current_avatar_id"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+type UserShopItemResponse struct {
+	ItemID          uuid.UUID  `json:"item_id"`
+	ItemCategoryID  uuid.UUID  `json:"item_category_id"`
+	CategoryCode    string     `json:"category_code"`
+	CategoryName    string     `json:"category_name"`
+	AvatarID        *uuid.UUID `json:"avatar_id"`
+	Name            string     `json:"name"`
+	Description     string     `json:"description"`
+	PriceCoin       int        `json:"price_coin"`
+	ImageURL        string     `json:"image_url"`
+	OwnershipStatus string     `json:"ownership_status"`
+	IsOwned         bool       `json:"is_owned"`
+	IsEquipped      bool       `json:"is_equipped"`
+	CanPurchase     bool       `json:"can_purchase"`
+	CanEquip        bool       `json:"can_equip"`
+}
+
 type UserItemCategoryResponse struct {
 	ItemCategoryID uuid.UUID `json:"item_category_id"`
 	Code           string    `json:"code"`
@@ -91,6 +151,7 @@ type UserItemCategoryResponse struct {
 type AdminItemResponse struct {
 	ItemID         uuid.UUID                 `json:"item_id"`
 	ItemCategoryID uuid.UUID                 `json:"item_category_id"`
+	AvatarID       *uuid.UUID                `json:"avatar_id"`
 	Category       AdminItemCategoryResponse `json:"category"`
 	Name           string                    `json:"name"`
 	Description    string                    `json:"description"`
@@ -106,6 +167,20 @@ type AdminItemResponse struct {
 type AdminListItemsResponse struct {
 	Items      []AdminItemResponse `json:"items"`
 	Pagination PaginationResponse  `json:"pagination"`
+}
+
+type UserListShopItemsResponse struct {
+	Items      []UserShopItemResponse `json:"items"`
+	Pagination PaginationResponse     `json:"pagination"`
+}
+
+type UserPurchaseShopItemResponse struct {
+	Item UserShopItemResponse `json:"item"`
+}
+
+type UserEquipShopItemResponse struct {
+	Item     UserShopItemResponse `json:"item"`
+	AvatarID uuid.UUID            `json:"avatar_id"`
 }
 
 type AdminGetItemDetailResponse struct {

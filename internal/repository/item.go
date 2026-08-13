@@ -13,6 +13,7 @@ type IItemRepository interface {
 	GetItem(tx *gorm.DB, param model.GetItemParam) (*entity.Item, error)
 	GetItemForUpdate(tx *gorm.DB, itemID uuid.UUID) (*entity.Item, error)
 	ListItems(tx *gorm.DB, param model.ListItemsParam) ([]entity.Item, int64, error)
+	ListVisibleShopItems(tx *gorm.DB, param model.ListVisibleShopItemsParam) ([]model.UserShopItemRow, int64, error)
 	UpdateItem(tx *gorm.DB, item *entity.Item) error
 	DeleteItem(tx *gorm.DB, itemID uuid.UUID) error
 }
@@ -87,6 +88,45 @@ func (r *ItemRepository) ListItems(tx *gorm.DB, param model.ListItemsParam) ([]e
 	return items, total, nil
 }
 
+func (r *ItemRepository) ListVisibleShopItems(tx *gorm.DB, param model.ListVisibleShopItemsParam) ([]model.UserShopItemRow, int64, error) {
+	var rows []model.UserShopItemRow
+	var total int64
+
+	query := applyVisibleShopItemFilters(tx.Table("items"), param)
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := applyVisibleShopItemFilters(tx.Table("items"), param).
+		Joins("LEFT JOIN user_items ON user_items.item_id = items.item_id AND user_items.user_id = ?", param.UserID).
+		Joins("LEFT JOIN user_profiles ON user_profiles.user_id = ?", param.UserID).
+		Select(`
+			items.item_id,
+			items.item_category_id,
+			item_categories.code AS category_code,
+			item_categories.name AS category_name,
+			items.avatar_id,
+			items.name,
+			items.description,
+			items.price_coin,
+			items.image_url,
+			user_items.user_item_id,
+			user_items.equipped_at,
+			user_profiles.avatar_id AS current_avatar_id,
+			items.created_at
+		`).
+		Order("items.created_at ASC").
+		Limit(param.Limit).
+		Offset(param.Offset).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return rows, total, nil
+}
+
 func (r *ItemRepository) UpdateItem(tx *gorm.DB, item *entity.Item) error {
 	err := tx.Debug().Save(item).Error
 	if err != nil {
@@ -127,6 +167,25 @@ func applyItemFilters(query *gorm.DB, param model.ListItemsParam) *gorm.DB {
 	}
 	if param.IsFeatured != nil {
 		query = query.Where("items.is_featured = ?", *param.IsFeatured)
+	}
+
+	return query
+}
+
+func applyVisibleShopItemFilters(query *gorm.DB, param model.ListVisibleShopItemsParam) *gorm.DB {
+	query = query.
+		Joins("JOIN item_categories ON item_categories.item_category_id = items.item_category_id").
+		Where("items.status = ? AND items.is_visible = ? AND items.deleted_at IS NULL", model.ItemStatusActive, true)
+
+	if param.Search != "" {
+		search := "%" + param.Search + "%"
+		query = query.Where("items.name LIKE ? OR items.description LIKE ?", search, search)
+	}
+	if param.ItemID != uuid.Nil {
+		query = query.Where("items.item_id = ?", param.ItemID)
+	}
+	if param.CategoryCode != "" {
+		query = query.Where("item_categories.code = ?", param.CategoryCode)
 	}
 
 	return query

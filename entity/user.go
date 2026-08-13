@@ -22,6 +22,7 @@ type User struct {
 	CaseVersions       []CaseVersion `gorm:"foreignKey:CreatedBy;references:UserID;constraint:onDelete:CASCADE"`
 	CreatedRedeemCodes []RedeemCode  `gorm:"foreignKey:CreatedByAdminID;references:UserID;constraint:onDelete:CASCADE"`
 	ClaimedRedeemCodes []RedeemCode  `gorm:"foreignKey:ClaimedByUserID;references:UserID;constraint:onDelete:CASCADE"`
+	UserItems          []UserItem    `gorm:"foreignKey:UserID;references:UserID;constraint:onDelete:CASCADE"`
 }
 
 type AdminLoginOtpSession struct {

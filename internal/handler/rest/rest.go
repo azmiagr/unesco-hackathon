@@ -45,6 +45,11 @@ func (r *Rest) MountEndpoint() {
 	user.GET("/profile", r.GetUserProfile)
 	user.GET("/item-categories", r.ListItemCategoriesForUser)
 
+	shop := user.Group("/shop")
+	shop.GET("/items", r.ListShopItemsForUser)
+	shop.POST("/items/:itemID/purchase", r.PurchaseShopItemForUser)
+	shop.PATCH("/items/:itemID/equip", r.EquipShopItemForUser)
+
 	admin := baseUrl.Group("/admin")
 	admin.Use(r.middleware.AuthenticateUser, r.middleware.OnlyAdmin())
 	admin.GET("/users", r.ListAdminUsers)

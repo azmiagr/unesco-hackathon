@@ -38,6 +38,7 @@ func Migrate(db *gorm.DB) error {
 		&entity.Avatar{},
 		&entity.ItemCategory{},
 		&entity.Item{},
+		&entity.UserItem{},
 		&entity.RedeemType{},
 		&entity.RedeemItem{},
 		&entity.UserProfile{},

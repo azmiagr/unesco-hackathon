@@ -17,6 +17,7 @@ type Repository struct {
 	CaseScoringOutcomeRepository  ICaseScoringOutcomeRepository
 	ItemCategoryRepository        IItemCategoryRepository
 	ItemRepository                IItemRepository
+	UserItemRepository            IUserItemRepository
 	RedeemTypeRepository          IRedeemTypeRepository
 	RedeemItemRepository          IRedeemItemRepository
 	GameConfigRepository          IGameConfigRepository
@@ -41,6 +42,7 @@ func NewRepository(db *gorm.DB) *Repository {
 		CaseScoringOutcomeRepository:  NewCaseScoringOutcomeRepository(db),
 		ItemCategoryRepository:        NewItemCategoryRepository(db),
 		ItemRepository:                NewItemRepository(db),
+		UserItemRepository:            NewUserItemRepository(db),
 		RedeemTypeRepository:          NewRedeemTypeRepository(db),
 		RedeemItemRepository:          NewRedeemItemRepository(db),
 		GameConfigRepository:          NewGameConfigRepository(db),

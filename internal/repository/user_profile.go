@@ -5,10 +5,12 @@ import (
 	"github.com/azmiagr/unesco-hackathon/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type IUserProfileRepository interface {
 	GetUserProfile(tx *gorm.DB, param model.GetUserProfileParam) (*entity.UserProfile, error)
+	GetUserProfileForUpdate(tx *gorm.DB, param model.GetUserProfileParam) (*entity.UserProfile, error)
 	CreateUserProfile(tx *gorm.DB, userProfile *entity.UserProfile) error
 	UpdateUserProfile(tx *gorm.DB, userProfile *entity.UserProfile) error
 	ListLeaderboard(tx *gorm.DB, param model.ListLeaderboardParam) ([]model.LeaderboardEntryRow, int64, error)
@@ -27,6 +29,16 @@ func NewUserProfileRepository(db *gorm.DB) IUserProfileRepository {
 func (r *UserProfileRepository) GetUserProfile(tx *gorm.DB, param model.GetUserProfileParam) (*entity.UserProfile, error) {
 	var userProfile entity.UserProfile
 	err := tx.Where(&param).First(&userProfile).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &userProfile, nil
+}
+
+func (r *UserProfileRepository) GetUserProfileForUpdate(tx *gorm.DB, param model.GetUserProfileParam) (*entity.UserProfile, error) {
+	var userProfile entity.UserProfile
+	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(&param).First(&userProfile).Error
 	if err != nil {
 		return nil, err
 	}

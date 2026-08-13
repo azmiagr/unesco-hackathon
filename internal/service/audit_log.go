@@ -160,20 +160,22 @@ func newAuditCasePublishSnapshot(caseEntity *entity.Case, caseVersion *entity.Ca
 }
 
 type auditItemSnapshot struct {
-	ItemID         uuid.UUID `json:"item_id"`
-	ItemCategoryID uuid.UUID `json:"item_category_id"`
-	Name           string    `json:"name"`
-	PriceCoin      int       `json:"price_coin"`
-	ImageURL       string    `json:"image_url"`
-	IsVisible      bool      `json:"is_visible"`
-	IsFeatured     bool      `json:"is_featured"`
-	Status         string    `json:"status"`
+	ItemID         uuid.UUID  `json:"item_id"`
+	ItemCategoryID uuid.UUID  `json:"item_category_id"`
+	AvatarID       *uuid.UUID `json:"avatar_id"`
+	Name           string     `json:"name"`
+	PriceCoin      int        `json:"price_coin"`
+	ImageURL       string     `json:"image_url"`
+	IsVisible      bool       `json:"is_visible"`
+	IsFeatured     bool       `json:"is_featured"`
+	Status         string     `json:"status"`
 }
 
 func newAuditItemSnapshot(item *entity.Item) auditItemSnapshot {
 	return auditItemSnapshot{
 		ItemID:         item.ItemID,
 		ItemCategoryID: item.ItemCategoryID,
+		AvatarID:       item.AvatarID,
 		Name:           item.Name,
 		PriceCoin:      item.PriceCoin,
 		ImageURL:       item.ImageURL,

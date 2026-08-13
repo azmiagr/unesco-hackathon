@@ -62,6 +62,72 @@ func (r *Rest) ListItemsByAdmin(c *gin.Context) {
 	response.Success(c, http.StatusOK, "items retrieved", result)
 }
 
+func (r *Rest) ListShopItemsForUser(c *gin.Context) {
+	user, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.UserListShopItemsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid list shop items request"))
+		return
+	}
+
+	result, err := r.service.ItemService.ListShopItemsForUser(user.UserID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "shop items retrieved", result)
+}
+
+func (r *Rest) PurchaseShopItemForUser(c *gin.Context) {
+	user, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	itemID, err := helper.ParseUUIDParam(c, "itemID", "invalid item id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.ItemService.PurchaseShopItemForUser(user.UserID, itemID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, "shop item purchased", result)
+}
+
+func (r *Rest) EquipShopItemForUser(c *gin.Context) {
+	user, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	itemID, err := helper.ParseUUIDParam(c, "itemID", "invalid item id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.ItemService.EquipShopItemForUser(user.UserID, itemID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "shop item equipped", result)
+}
+
 func (r *Rest) GetItemDetailByAdmin(c *gin.Context) {
 	itemID, err := helper.ParseUUIDParam(c, "itemID", "invalid item id")
 	if err != nil {
