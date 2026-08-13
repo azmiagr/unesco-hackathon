@@ -209,7 +209,8 @@ func (s *AuthService) SelectRegisterAvatar(sessionToken string, req model.Select
 		return nil, err
 	}
 
-	if lockedSession.CurrentStep != model.RegisterStepEmailVerified {
+	if lockedSession.CurrentStep != model.RegisterStepEmailVerified &&
+		lockedSession.CurrentStep != model.RegisterStepAvatarSelected {
 		return nil, appErrors.Conflict("registration step is not waiting for avatar selection")
 	}
 
