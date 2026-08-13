@@ -28,6 +28,23 @@ func (r *Rest) ListItemCategoriesByAdmin(c *gin.Context) {
 	response.Success(c, http.StatusOK, "item categories retrieved", result)
 }
 
+func (r *Rest) ListItemCategoriesForUser(c *gin.Context) {
+	var req model.UserListItemCategoriesRequest
+	err := c.ShouldBindQuery(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid list item categories request"))
+		return
+	}
+
+	result, err := r.service.ItemService.ListItemCategoriesForUser(req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "item categories retrieved", result)
+}
+
 func (r *Rest) ListItemsByAdmin(c *gin.Context) {
 	var req model.AdminListItemsRequest
 	err := c.ShouldBindQuery(&req)

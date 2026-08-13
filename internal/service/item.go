@@ -32,6 +32,7 @@ var allowedItemStatuses = map[string]bool{
 
 type IItemService interface {
 	ListItemCategoriesByAdmin(req model.AdminListItemCategoriesRequest) (*model.AdminListItemCategoriesResponse, error)
+	ListItemCategoriesForUser(req model.UserListItemCategoriesRequest) (*model.UserListItemCategoriesResponse, error)
 	ListItemsByAdmin(req model.AdminListItemsRequest) (*model.AdminListItemsResponse, error)
 	GetItemDetailByAdmin(itemID uuid.UUID) (*model.AdminGetItemDetailResponse, error)
 	CreateItemByAdmin(adminUserID uuid.UUID, req model.AdminCreateItemRequest) (*model.AdminCreateItemResponse, error)
@@ -79,6 +80,24 @@ func (s *ItemService) ListItemCategoriesByAdmin(req model.AdminListItemCategorie
 	}
 
 	return &model.AdminListItemCategoriesResponse{
+		Categories: responses,
+	}, nil
+}
+
+func (s *ItemService) ListItemCategoriesForUser(req model.UserListItemCategoriesRequest) (*model.UserListItemCategoriesResponse, error) {
+	categories, err := s.itemCategoryRepo.ListItemCategories(s.db, model.ListItemCategoriesParam{
+		Search: strings.TrimSpace(req.Search),
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to list item categories")
+	}
+
+	responses := make([]model.UserItemCategoryResponse, 0, len(categories))
+	for _, category := range categories {
+		responses = append(responses, mapUserItemCategoryResponse(category))
+	}
+
+	return &model.UserListItemCategoriesResponse{
 		Categories: responses,
 	}, nil
 }
@@ -543,5 +562,14 @@ func mapAdminItemCategoryResponse(category entity.ItemCategory) model.AdminItemC
 		Description:    category.Description,
 		CreatedAt:      category.CreatedAt,
 		UpdatedAt:      category.UpdatedAt,
+	}
+}
+
+func mapUserItemCategoryResponse(category entity.ItemCategory) model.UserItemCategoryResponse {
+	return model.UserItemCategoryResponse{
+		ItemCategoryID: category.ItemCategoryID,
+		Code:           category.Code,
+		Name:           category.Name,
+		Description:    category.Description,
 	}
 }

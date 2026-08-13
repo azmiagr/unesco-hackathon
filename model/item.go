@@ -81,6 +81,13 @@ type AdminItemCategoryResponse struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
+type UserItemCategoryResponse struct {
+	ItemCategoryID uuid.UUID `json:"item_category_id"`
+	Code           string    `json:"code"`
+	Name           string    `json:"name"`
+	Description    *string   `json:"description"`
+}
+
 type AdminItemResponse struct {
 	ItemID         uuid.UUID                 `json:"item_id"`
 	ItemCategoryID uuid.UUID                 `json:"item_category_id"`
@@ -123,4 +130,12 @@ type AdminListItemCategoriesRequest struct {
 
 type AdminListItemCategoriesResponse struct {
 	Categories []AdminItemCategoryResponse `json:"categories"`
+}
+
+type UserListItemCategoriesRequest struct {
+	Search string `form:"search"`
+}
+
+type UserListItemCategoriesResponse struct {
+	Categories []UserItemCategoryResponse `json:"categories"`
 }
