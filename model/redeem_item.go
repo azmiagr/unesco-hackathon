@@ -28,6 +28,7 @@ type ListRedeemTypesParam struct {
 
 type GetRedeemItemParam struct {
 	RedeemItemID uuid.UUID
+	Name         string
 }
 
 type ListRedeemItemsParam struct {

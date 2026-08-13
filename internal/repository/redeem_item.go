@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"strings"
+
 	"github.com/azmiagr/unesco-hackathon/entity"
 	"github.com/azmiagr/unesco-hackathon/model"
 	"github.com/google/uuid"
@@ -11,6 +13,8 @@ import (
 type IRedeemItemRepository interface {
 	CreateRedeemItem(tx *gorm.DB, redeemItem *entity.RedeemItem) error
 	GetRedeemItem(tx *gorm.DB, param model.GetRedeemItemParam) (*entity.RedeemItem, error)
+	GetRedeemItemByNormalizedName(tx *gorm.DB, name string) (*entity.RedeemItem, error)
+	ListRedeemItemsByNormalizedNameLookup(tx *gorm.DB) ([]entity.RedeemItem, error)
 	GetRedeemItemForUpdate(tx *gorm.DB, redeemItemID uuid.UUID) (*entity.RedeemItem, error)
 	ListRedeemItems(tx *gorm.DB, param model.ListRedeemItemsParam) ([]entity.RedeemItem, int64, error)
 	UpdateRedeemItem(tx *gorm.DB, redeemItem *entity.RedeemItem) error
@@ -41,6 +45,22 @@ func (r *RedeemItemRepository) GetRedeemItem(tx *gorm.DB, param model.GetRedeemI
 	if param.RedeemItemID != uuid.Nil {
 		query = query.Where("redeem_items.redeem_item_id = ?", param.RedeemItemID)
 	}
+	if param.Name != "" {
+		query = query.Where(`
+			LOWER(TRIM(
+				REPLACE(
+					REPLACE(
+						REPLACE(
+							REPLACE(redeem_items.name, CHAR(13), ' '),
+							CHAR(10), ' '
+						),
+						CHAR(9), ' '
+					),
+					'  ', ' '
+				)
+			)) = ?
+		`, normalizeRedeemItemName(param.Name))
+	}
 
 	err := query.First(&redeemItem).Error
 	if err != nil {
@@ -48,6 +68,44 @@ func (r *RedeemItemRepository) GetRedeemItem(tx *gorm.DB, param model.GetRedeemI
 	}
 
 	return &redeemItem, nil
+}
+
+func (r *RedeemItemRepository) GetRedeemItemByNormalizedName(tx *gorm.DB, name string) (*entity.RedeemItem, error) {
+	normalizedName := normalizeRedeemItemName(name)
+
+	if normalizedName == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	redeemItems, err := r.ListRedeemItemsByNormalizedNameLookup(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, redeemItem := range redeemItems {
+		if normalizeRedeemItemName(redeemItem.Name) == normalizedName {
+			return &redeemItem, nil
+		}
+	}
+
+	return nil, gorm.ErrRecordNotFound
+}
+
+func (r *RedeemItemRepository) ListRedeemItemsByNormalizedNameLookup(tx *gorm.DB) ([]entity.RedeemItem, error) {
+	var redeemItems []entity.RedeemItem
+
+	err := tx.Model(&entity.RedeemItem{}).
+		Order("redeem_items.created_at DESC").
+		Find(&redeemItems).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return redeemItems, nil
+}
+
+func normalizeRedeemItemName(name string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(name)), " "))
 }
 
 func (r *RedeemItemRepository) GetRedeemItemForUpdate(tx *gorm.DB, redeemItemID uuid.UUID) (*entity.RedeemItem, error) {

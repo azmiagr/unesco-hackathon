@@ -1,11 +1,13 @@
 package service
 
 import (
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"math"
 	"mime/multipart"
 	"strings"
+	"time"
 
 	"github.com/azmiagr/unesco-hackathon/entity"
 	"github.com/azmiagr/unesco-hackathon/internal/repository"
@@ -22,6 +24,10 @@ const (
 	defaultAdminRedeemItemLimit = 10
 	maxAdminRedeemItemLimit     = 100
 	maxRedeemItemImageSize      = 2 * 1024 * 1024
+	defaultAdminRedeemCodeLimit = 10
+	maxAdminRedeemCodeLimit     = 100
+	maxRedeemCodeCSVSize        = 2 * 1024 * 1024
+	redeemCodeDateLayout        = "2006-01-02"
 )
 
 var allowedRedeemItemStatuses = map[string]bool{
@@ -36,19 +42,30 @@ var allowedRedeemClaimPeriods = map[string]bool{
 	model.RedeemClaimPeriodMonthly: true,
 }
 
+var allowedRedeemCodeStatuses = map[string]bool{
+	model.RedeemCodeStatusAvailable: true,
+	model.RedeemCodeStatusClaimed:   true,
+	model.RedeemCodeStatusExpired:   true,
+}
+
 type IRedeemService interface {
 	ListRedeemTypesByAdmin(req model.AdminListRedeemTypesRequest) (*model.AdminListRedeemTypesResponse, error)
 	ListRedeemItemsByAdmin(req model.AdminListRedeemItemsRequest) (*model.AdminListRedeemItemsResponse, error)
+	ListRedeemCodesByAdmin(req model.AdminListRedeemCodesRequest) (*model.AdminListRedeemCodesResponse, error)
 	GetRedeemItemDetailByAdmin(redeemItemID uuid.UUID) (*model.AdminGetRedeemItemDetailResponse, error)
 	CreateRedeemItemByAdmin(adminUserID uuid.UUID, req model.AdminCreateRedeemItemRequest) (*model.AdminCreateRedeemItemResponse, error)
+	CreateRedeemCodeManualByAdmin(adminUserID uuid.UUID, req model.AdminCreateRedeemCodeManualRequest) (*model.AdminCreateRedeemCodeResponse, error)
+	CreateRedeemCodesCSVByAdmin(adminUserID uuid.UUID, req model.AdminCreateRedeemCodeCSVRequest) (*model.AdminCreateRedeemCodesCSVResponse, error)
 	UpdateRedeemItemByAdmin(adminUserID uuid.UUID, redeemItemID uuid.UUID, req model.AdminUpdateRedeemItemRequest) (*model.AdminUpdateRedeemItemResponse, error)
 	DeleteRedeemItemByAdmin(adminUserID uuid.UUID, redeemItemID uuid.UUID) (*model.AdminDeleteRedeemItemResponse, error)
+	DeleteRedeemCodeByAdmin(adminUserID uuid.UUID, redeemCodeID uuid.UUID) (*model.AdminDeleteRedeemCodeResponse, error)
 }
 
 type RedeemService struct {
 	db             *gorm.DB
 	redeemItemRepo repository.IRedeemItemRepository
 	redeemTypeRepo repository.IRedeemTypeRepository
+	redeemCodeRepo repository.IRedeemCodeRepository
 	userRepo       repository.IUserRepository
 	auditLogRepo   repository.IAuditLogRepository
 	storage        supabase.Interface
@@ -57,6 +74,7 @@ type RedeemService struct {
 func NewRedeemService(
 	redeemItemRepo repository.IRedeemItemRepository,
 	redeemTypeRepo repository.IRedeemTypeRepository,
+	redeemCodeRepo repository.IRedeemCodeRepository,
 	userRepo repository.IUserRepository,
 	auditLogRepo repository.IAuditLogRepository,
 	storage supabase.Interface,
@@ -65,6 +83,7 @@ func NewRedeemService(
 		db:             mariadb.Connection,
 		redeemItemRepo: redeemItemRepo,
 		redeemTypeRepo: redeemTypeRepo,
+		redeemCodeRepo: redeemCodeRepo,
 		userRepo:       userRepo,
 		auditLogRepo:   auditLogRepo,
 		storage:        storage,
@@ -151,6 +170,66 @@ func (s *RedeemService) ListRedeemItemsByAdmin(req model.AdminListRedeemItemsReq
 
 	return &model.AdminListRedeemItemsResponse{
 		Items: responses,
+		Pagination: model.PaginationResponse{
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		},
+	}, nil
+}
+
+func (s *RedeemService) ListRedeemCodesByAdmin(req model.AdminListRedeemCodesRequest) (*model.AdminListRedeemCodesResponse, error) {
+	page := req.Page
+	if page < 1 {
+		page = 1
+	}
+
+	limit := req.Limit
+	if limit < 1 {
+		limit = defaultAdminRedeemCodeLimit
+	}
+	if limit > maxAdminRedeemCodeLimit {
+		limit = maxAdminRedeemCodeLimit
+	}
+
+	redeemItemID := uuid.Nil
+	if strings.TrimSpace(req.RedeemItemID) != "" {
+		parsedID, err := uuid.Parse(strings.TrimSpace(req.RedeemItemID))
+		if err != nil {
+			return nil, appErrors.BadRequest("invalid redeem item id")
+		}
+		redeemItemID = parsedID
+	}
+
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if status != "" && !allowedRedeemCodeStatuses[status] {
+		return nil, appErrors.BadRequest("invalid redeem code status")
+	}
+
+	rows, total, err := s.redeemCodeRepo.ListRedeemCodes(s.db, model.ListRedeemCodesParam{
+		Search:       strings.TrimSpace(req.Search),
+		RedeemItemID: redeemItemID,
+		Status:       status,
+		Limit:        limit,
+		Offset:       (page - 1) * limit,
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to list redeem codes")
+	}
+
+	responses := make([]model.AdminRedeemCodeResponse, 0, len(rows))
+	for _, row := range rows {
+		responses = append(responses, mapAdminRedeemCodeResponse(row))
+	}
+
+	totalPages := 0
+	if total > 0 {
+		totalPages = int(math.Ceil(float64(total) / float64(limit)))
+	}
+
+	return &model.AdminListRedeemCodesResponse{
+		RedeemCodes: responses,
 		Pagination: model.PaginationResponse{
 			Page:       page,
 			Limit:      limit,
@@ -287,6 +366,169 @@ func (s *RedeemService) CreateRedeemItemByAdmin(
 
 	return &model.AdminCreateRedeemItemResponse{
 		Item: redeemItemResponse,
+	}, nil
+}
+
+func (s *RedeemService) CreateRedeemCodeManualByAdmin(
+	adminUserID uuid.UUID,
+	req model.AdminCreateRedeemCodeManualRequest,
+) (*model.AdminCreateRedeemCodeResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	redeemItemID, err := uuid.Parse(strings.TrimSpace(req.RedeemItemID))
+	if err != nil {
+		return nil, appErrors.BadRequest("invalid redeem item id")
+	}
+
+	code, err := normalizeRedeemCode(req.Code)
+	if err != nil {
+		return nil, err
+	}
+
+	expiresAt, err := parseRedeemCodeExpiry(req.ExpiresAt)
+	if err != nil {
+		return nil, appErrors.BadRequest("invalid expires_at")
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	redeemItem, err := s.redeemItemRepo.GetRedeemItem(tx, model.GetRedeemItemParam{RedeemItemID: redeemItemID})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("redeem item not found")
+		}
+		return nil, appErrors.InternalServer("failed to get redeem item")
+	}
+
+	redeemCode := &entity.RedeemCode{
+		RedeemCodeID:     uuid.New(),
+		RedeemItemID:     redeemItem.RedeemItemID,
+		Code:             code,
+		ExpiresAt:        expiresAt,
+		CreatedByAdminID: &adminUserID,
+	}
+
+	err = s.redeemCodeRepo.CreateRedeemCode(tx, redeemCode)
+	if err != nil {
+		return nil, appErrors.Conflict("redeem code already exists")
+	}
+
+	row, err := s.redeemCodeRepo.GetRedeemCodeRow(tx, redeemCode.RedeemCodeID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get created redeem code")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminCreateRedeemCodeResponse{
+		RedeemCode: mapAdminRedeemCodeResponse(*row),
+	}, nil
+}
+
+func (s *RedeemService) CreateRedeemCodesCSVByAdmin(
+	adminUserID uuid.UUID,
+	req model.AdminCreateRedeemCodeCSVRequest,
+) (*model.AdminCreateRedeemCodesCSVResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+	if req.File == nil {
+		return nil, appErrors.BadRequest("csv file is required")
+	}
+	if req.File.Size > maxRedeemCodeCSVSize {
+		return nil, appErrors.BadRequest("csv file is too large")
+	}
+
+	file, err := req.File.Open()
+	if err != nil {
+		return nil, appErrors.BadRequest("failed to open csv file")
+	}
+	defer file.Close()
+
+	records, err := csv.NewReader(file).ReadAll()
+	if err != nil {
+		return nil, appErrors.BadRequest("invalid csv file")
+	}
+	if len(records) < 2 {
+		return nil, appErrors.BadRequest("csv file is empty")
+	}
+
+	if err := validateRedeemCodeCSVHeader(records[0]); err != nil {
+		return nil, err
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	redeemCodes := make([]entity.RedeemCode, 0, len(records)-1)
+	seenCodes := map[string]bool{}
+	redeemItemLookup, availableRedeemItemNames, err := s.buildRedeemItemNameLookup(tx)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get redeem items")
+	}
+
+	for index, record := range records[1:] {
+		lineNumber := index + 2
+		if len(record) != 3 {
+			return nil, appErrors.BadRequest(fmt.Sprintf("invalid csv row at line %d", lineNumber))
+		}
+
+		code, err := normalizeRedeemCode(record[0])
+		if err != nil {
+			return nil, appErrors.BadRequest(fmt.Sprintf("invalid code at line %d", lineNumber))
+		}
+		if seenCodes[code] {
+			return nil, appErrors.BadRequest(fmt.Sprintf("duplicate code in csv at line %d", lineNumber))
+		}
+		seenCodes[code] = true
+
+		redeemItemName := strings.TrimSpace(record[1])
+		if redeemItemName == "" {
+			return nil, appErrors.BadRequest(fmt.Sprintf("redeem item name is required at line %d", lineNumber))
+		}
+
+		redeemItem, ok := redeemItemLookup[normalizeLookupName(redeemItemName)]
+		if !ok {
+			return nil, appErrors.BadRequest(fmt.Sprintf(
+				"redeem item %q not found at line %d. available redeem items: %s",
+				redeemItemName,
+				lineNumber,
+				strings.Join(availableRedeemItemNames, ", "),
+			))
+		}
+
+		expiresAt, err := parseRedeemCodeExpiry(record[2])
+		if err != nil {
+			return nil, appErrors.BadRequest(fmt.Sprintf("invalid expires_at at line %d", lineNumber))
+		}
+
+		redeemCodes = append(redeemCodes, entity.RedeemCode{
+			RedeemCodeID:     uuid.New(),
+			RedeemItemID:     redeemItem.RedeemItemID,
+			Code:             code,
+			ExpiresAt:        expiresAt,
+			CreatedByAdminID: &adminUserID,
+		})
+	}
+
+	err = s.redeemCodeRepo.CreateRedeemCodes(tx, redeemCodes)
+	if err != nil {
+		return nil, appErrors.Conflict("one or more redeem codes already exist")
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.AdminCreateRedeemCodesCSVResponse{
+		CreatedCount: len(redeemCodes),
 	}, nil
 }
 
@@ -463,6 +705,55 @@ func (s *RedeemService) DeleteRedeemItemByAdmin(
 	}, nil
 }
 
+func (s *RedeemService) buildRedeemItemNameLookup(tx *gorm.DB) (map[string]entity.RedeemItem, []string, error) {
+	redeemItems, err := s.redeemItemRepo.ListRedeemItemsByNormalizedNameLookup(tx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	lookup := make(map[string]entity.RedeemItem, len(redeemItems))
+	names := make([]string, 0, len(redeemItems))
+	for _, redeemItem := range redeemItems {
+		lookup[normalizeLookupName(redeemItem.Name)] = redeemItem
+		names = append(names, redeemItem.Name)
+	}
+
+	if len(names) == 0 {
+		names = append(names, "-")
+	}
+
+	return lookup, names, nil
+}
+
+func (s *RedeemService) DeleteRedeemCodeByAdmin(
+	adminUserID uuid.UUID,
+	redeemCodeID uuid.UUID,
+) (*model.AdminDeleteRedeemCodeResponse, error) {
+	if adminUserID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+	if redeemCodeID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid redeem code id")
+	}
+
+	_, err := s.redeemCodeRepo.GetRedeemCode(s.db, model.GetRedeemCodeParam{RedeemCodeID: redeemCodeID})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("redeem code not found")
+		}
+		return nil, appErrors.InternalServer("failed to get redeem code")
+	}
+
+	err = s.redeemCodeRepo.DeleteRedeemCode(s.db, redeemCodeID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to delete redeem code")
+	}
+
+	return &model.AdminDeleteRedeemCodeResponse{
+		RedeemCodeID: redeemCodeID,
+	}, nil
+}
+
 type adminRedeemItemPayload struct {
 	Name              string
 	TypeCode          string
@@ -594,6 +885,51 @@ func formatRedeemTypeName(code string) string {
 	return strings.Join(parts, " ")
 }
 
+func normalizeRedeemCode(raw string) (string, error) {
+	code := strings.ToUpper(strings.TrimSpace(raw))
+	if code == "" {
+		return "", appErrors.BadRequest("redeem code is required")
+	}
+	if len(code) > 120 {
+		return "", appErrors.BadRequest("redeem code is too long")
+	}
+
+	return code, nil
+}
+
+func parseRedeemCodeExpiry(raw string) (time.Time, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return time.Time{}, appErrors.BadRequest("expires_at is required")
+	}
+
+	parsed, err := time.Parse(redeemCodeDateLayout, value)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return parsed.UTC(), nil
+}
+
+func validateRedeemCodeCSVHeader(header []string) error {
+	if len(header) != 3 {
+		return appErrors.BadRequest("invalid csv header")
+	}
+
+	expected := []string{"code", "redeem_item_name", "expires_at"}
+	for index, value := range expected {
+		if strings.ToLower(strings.TrimSpace(header[index])) != value {
+			return appErrors.BadRequest("invalid csv header")
+		}
+	}
+
+	return nil
+}
+
+func normalizeLookupName(name string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(name)), " "))
+}
+
 func (s *RedeemService) uploadRedeemItemImage(file *multipart.FileHeader) (string, error) {
 	if file == nil {
 		return "", nil
@@ -640,6 +976,21 @@ func (s *RedeemService) mapAdminRedeemItemResponse(tx *gorm.DB, redeemItem entit
 		CreatedAt:         redeemItem.CreatedAt,
 		UpdatedAt:         redeemItem.UpdatedAt,
 	}, nil
+}
+
+func mapAdminRedeemCodeResponse(row model.AdminRedeemCodeListRow) model.AdminRedeemCodeResponse {
+	return model.AdminRedeemCodeResponse{
+		RedeemCodeID:    row.RedeemCodeID,
+		RedeemItemID:    row.RedeemItemID,
+		RedeemItemName:  row.RedeemItemName,
+		Code:            row.Code,
+		Status:          row.Status,
+		ClaimedByUserID: row.ClaimedByUserID,
+		ClaimedBy:       row.ClaimedBy,
+		ClaimedAt:       row.ClaimedAt,
+		ExpiresAt:       row.ExpiresAt,
+		CreatedAt:       row.CreatedAt,
+	}
 }
 
 func mapAdminRedeemTypeResponse(redeemType entity.RedeemType) model.AdminRedeemTypeResponse {

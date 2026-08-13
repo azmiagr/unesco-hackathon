@@ -16,10 +16,12 @@ type User struct {
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 
-	UserProfile  UserProfile   `gorm:"foreignKey:UserID;references:UserID;constraint:onDelete:CASCADE"`
-	OtpCodes     []OtpCode     `gorm:"foreignKey:UserID;references:UserID;constraint:onDelete:CASCADE"`
-	Cases        []Case        `gorm:"foreignKey:CreatedBy;references:UserID;constraint:onDelete:CASCADE"`
-	CaseVersions []CaseVersion `gorm:"foreignKey:CreatedBy;references:UserID;constraint:onDelete:CASCADE"`
+	UserProfile        UserProfile   `gorm:"foreignKey:UserID;references:UserID;constraint:onDelete:CASCADE"`
+	OtpCodes           []OtpCode     `gorm:"foreignKey:UserID;references:UserID;constraint:onDelete:CASCADE"`
+	Cases              []Case        `gorm:"foreignKey:CreatedBy;references:UserID;constraint:onDelete:CASCADE"`
+	CaseVersions       []CaseVersion `gorm:"foreignKey:CreatedBy;references:UserID;constraint:onDelete:CASCADE"`
+	CreatedRedeemCodes []RedeemCode  `gorm:"foreignKey:CreatedByAdminID;references:UserID;constraint:onDelete:CASCADE"`
+	ClaimedRedeemCodes []RedeemCode  `gorm:"foreignKey:ClaimedByUserID;references:UserID;constraint:onDelete:CASCADE"`
 }
 
 type AdminLoginOtpSession struct {

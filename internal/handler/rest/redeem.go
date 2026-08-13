@@ -45,6 +45,23 @@ func (r *Rest) ListRedeemItemsByAdmin(c *gin.Context) {
 	response.Success(c, http.StatusOK, "redeem items retrieved", result)
 }
 
+func (r *Rest) ListRedeemCodesByAdmin(c *gin.Context) {
+	var req model.AdminListRedeemCodesRequest
+	err := c.ShouldBindQuery(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid list redeem codes request"))
+		return
+	}
+
+	result, err := r.service.RedeemService.ListRedeemCodesByAdmin(req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "redeem codes retrieved", result)
+}
+
 func (r *Rest) GetRedeemItemDetailByAdmin(c *gin.Context) {
 	redeemItemID, err := helper.ParseUUIDParam(c, "redeemItemID", "invalid redeem item id")
 	if err != nil {
@@ -92,6 +109,53 @@ func (r *Rest) CreateRedeemItemByAdmin(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusCreated, "redeem item created", result)
+}
+
+func (r *Rest) CreateRedeemCodeManualByAdmin(c *gin.Context) {
+	adminUser, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.AdminCreateRedeemCodeManualRequest
+	err = c.ShouldBindJSON(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid create redeem code request"))
+		return
+	}
+
+	result, err := r.service.RedeemService.CreateRedeemCodeManualByAdmin(adminUser.UserID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, "redeem code created", result)
+}
+
+func (r *Rest) CreateRedeemCodesCSVByAdmin(c *gin.Context) {
+	adminUser, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("csv file is required"))
+		return
+	}
+
+	result, err := r.service.RedeemService.CreateRedeemCodesCSVByAdmin(adminUser.UserID, model.AdminCreateRedeemCodeCSVRequest{
+		File: file,
+	})
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, "redeem codes uploaded", result)
 }
 
 func (r *Rest) UpdateRedeemItemByAdmin(c *gin.Context) {
@@ -153,4 +217,26 @@ func (r *Rest) DeleteRedeemItemByAdmin(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, "redeem item deleted", result)
+}
+
+func (r *Rest) DeleteRedeemCodeByAdmin(c *gin.Context) {
+	adminUser, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	redeemCodeID, err := helper.ParseUUIDParam(c, "redeemCodeID", "invalid redeem code id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.RedeemService.DeleteRedeemCodeByAdmin(adminUser.UserID, redeemCodeID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "redeem code deleted", result)
 }

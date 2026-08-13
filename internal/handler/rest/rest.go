@@ -83,6 +83,12 @@ func (r *Rest) MountEndpoint() {
 	redeemItems.PATCH("/:redeemItemID", r.UpdateRedeemItemByAdmin)
 	redeemItems.DELETE("/:redeemItemID", r.DeleteRedeemItemByAdmin)
 
+	redeemCodes := admin.Group("/redeem-codes")
+	redeemCodes.GET("", r.ListRedeemCodesByAdmin)
+	redeemCodes.POST("/manual", r.CreateRedeemCodeManualByAdmin)
+	redeemCodes.POST("/csv", r.CreateRedeemCodesCSVByAdmin)
+	redeemCodes.DELETE("/:redeemCodeID", r.DeleteRedeemCodeByAdmin)
+
 	cases := admin.Group("/cases")
 	cases.GET("/lookups", r.GetCaseLookupsByAdmin)
 	cases.GET("", r.ListCasesByAdmin)

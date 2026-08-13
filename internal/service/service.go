@@ -28,7 +28,7 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 	caseService := NewCaseService(repository.CaseRepository, repository.CaseVersionRepository, repository.CaseEvidenceRepository, repository.CaseQuestionRepository, repository.CaseChatbotConfigRepository, repository.CaseScoringOutcomeRepository, repository.UserRepository, repository.AuditLogRepository, supabase, repository.UserProfileRepository)
 	avatarService := NewAvatarService(repository.AvatarRepository)
 	itemService := NewItemService(repository.ItemRepository, repository.ItemCategoryRepository, repository.UserRepository, repository.AuditLogRepository, supabase)
-	redeemService := NewRedeemService(repository.RedeemItemRepository, repository.RedeemTypeRepository, repository.UserRepository, repository.AuditLogRepository, supabase)
+	redeemService := NewRedeemService(repository.RedeemItemRepository, repository.RedeemTypeRepository, repository.RedeemCodeRepository, repository.UserRepository, repository.AuditLogRepository, supabase)
 	gameConfigService := NewGameConfigService(repository.GameConfigRepository, repository.GameLevelRepository, repository.UserRepository, repository.AuditLogRepository)
 	auditLogService := NewAuditLogService(repository.AuditLogRepository)
 	leaderboardService := NewLeaderboardService(repository.UserProfileRepository)
