@@ -99,6 +99,7 @@ type ICaseService interface {
 	UpdatePublicAnnouncementEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID, req model.AdminUpdatePublicAnnouncementEvidenceRequest) (*model.AdminUpdatePublicAnnouncementEvidenceResponse, error)
 	DeleteCaseEvidenceByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseEvidenceID uuid.UUID) (*model.AdminDeleteCaseEvidenceResponse, error)
 	DeleteCaseQuestionByAdmin(adminUserID uuid.UUID, caseID uuid.UUID, caseVersionID uuid.UUID, caseQuestionID uuid.UUID) (*model.AdminDeleteCaseQuestionResponse, error)
+	ListCasesForUser(userID uuid.UUID, req model.ListUserCasesRequest) (*model.ListUserCasesResponse, error)
 }
 
 type CaseService struct {
@@ -112,6 +113,7 @@ type CaseService struct {
 	userRepo               repository.IUserRepository
 	auditLogRepo           repository.IAuditLogRepository
 	storage                supabase.Interface
+	userProfileRepo        repository.IUserProfileRepository
 }
 
 func NewCaseService(
@@ -124,6 +126,7 @@ func NewCaseService(
 	userRepo repository.IUserRepository,
 	auditLogRepo repository.IAuditLogRepository,
 	storage supabase.Interface,
+	userProfileRepo repository.IUserProfileRepository,
 ) ICaseService {
 	return &CaseService{
 		db:                     mariadb.Connection,
@@ -136,5 +139,6 @@ func NewCaseService(
 		userRepo:               userRepo,
 		auditLogRepo:           auditLogRepo,
 		storage:                storage,
+		userProfileRepo:        userProfileRepo,
 	}
 }

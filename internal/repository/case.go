@@ -18,6 +18,7 @@ type ICaseRepository interface {
 	UpdateCase(tx *gorm.DB, caseEntity *entity.Case) error
 	HardDeleteCase(tx *gorm.DB, caseID uuid.UUID) error
 	CaseExists(tx *gorm.DB, param model.GetCaseParam) (bool, error)
+	ListPublishedCasesForUser(tx *gorm.DB, param model.ListUserCasesParam) ([]model.UserCaseListRow, int64, error)
 }
 
 type CaseRepository struct {
@@ -240,6 +241,44 @@ func applyAdminCaseFilters(query *gorm.DB, param model.AdminListCasesParam) *gor
 	}
 
 	return query
+}
+
+func (r *CaseRepository) ListPublishedCasesForUser(tx *gorm.DB, param model.ListUserCasesParam) ([]model.UserCaseListRow, int64, error) {
+	var cases []model.UserCaseListRow
+	var total int64
+
+	query := tx.Model(&entity.Case{}).
+		Where("cases.status = ?", model.CaseStatusPublished)
+
+	err := query.Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	err = tx.Model(&entity.Case{}).
+		Where("cases.status = ?", model.CaseStatusPublished).
+		Select(`
+			cases.case_id,
+			cases.title,
+			cases.slug,
+			cases.short_description,
+			cases.difficulty_level,
+			cases.estimated_duration_minutes,
+			cases.minimum_level,
+			cases.minimum_reputation,
+			cases.thumbnail_url,
+			cases.published_at,
+			cases.created_at
+		`).
+		Order("cases.published_at DESC, cases.created_at DESC").
+		Limit(param.Limit).
+		Offset(param.Offset).
+		Scan(&cases).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return cases, total, nil
 }
 
 func adminCaseSelectColumns() []string {

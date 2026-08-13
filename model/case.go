@@ -67,6 +67,19 @@ const (
 	CityImpactTrust     = "trust"
 	CityImpactStability = "stability"
 	CityImpactWellbeing = "wellbeing"
+
+	UserCaseTabAll        = "all"
+	UserCaseTabInProgress = "in_progress"
+	UserCaseTabCompleted  = "completed"
+
+	UserCaseAccessUnlocked = "unlocked"
+	UserCaseAccessLocked   = "locked"
+
+	UserCaseProgressNew        = "new"
+	UserCaseProgressAvailable  = "available"
+	UserCaseProgressLocked     = "locked"
+	UserCaseProgressInProgress = "in_progress"
+	UserCaseProgressCompleted  = "completed"
 )
 
 type GetCaseParam struct {
@@ -271,4 +284,51 @@ type AdminCaseLookupsResponse struct {
 	ScoringCategories []CaseLookupOptionResponse `json:"scoring_categories"`
 	OutcomeRules      []CaseLookupOptionResponse `json:"outcome_rules"`
 	CityImpacts       []CaseLookupOptionResponse `json:"city_impacts"`
+}
+
+type ListUserCasesRequest struct {
+	Tab   string `form:"tab"`
+	Page  int    `form:"page"`
+	Limit int    `form:"limit"`
+}
+
+type ListUserCasesParam struct {
+	Limit  int
+	Offset int
+}
+
+type UserCaseListRow struct {
+	CaseID                   uuid.UUID  `json:"case_id"`
+	Title                    string     `json:"title"`
+	Slug                     string     `json:"slug"`
+	ShortDescription         string     `json:"short_description"`
+	DifficultyLevel          string     `json:"difficulty_level"`
+	EstimatedDurationMinutes int        `json:"estimated_duration_minutes"`
+	MinimumLevel             int        `json:"minimum_level"`
+	MinimumReputation        float64    `json:"minimum_reputation"`
+	ThumbnailURL             *string    `json:"thumbnail_url"`
+	PublishedAt              *time.Time `json:"published_at"`
+	CreatedAt                time.Time  `json:"created_at"`
+}
+
+type UserCaseCardResponse struct {
+	CaseID                   uuid.UUID  `json:"case_id"`
+	Title                    string     `json:"title"`
+	Slug                     string     `json:"slug"`
+	ShortDescription         string     `json:"short_description"`
+	DifficultyLevel          string     `json:"difficulty_level"`
+	EstimatedDurationMinutes int        `json:"estimated_duration_minutes"`
+	MinimumLevel             int        `json:"minimum_level"`
+	MinimumReputation        float64    `json:"minimum_reputation"`
+	ThumbnailURL             *string    `json:"thumbnail_url"`
+	AccessStatus             string     `json:"access_status"`
+	ProgressStatus           string     `json:"progress_status"`
+	LockedReason             *string    `json:"locked_reason"`
+	PublishedAt              *time.Time `json:"published_at"`
+	CreatedAt                time.Time  `json:"created_at"`
+}
+
+type ListUserCasesResponse struct {
+	Cases      []UserCaseCardResponse `json:"cases"`
+	Pagination PaginationResponse     `json:"pagination"`
 }

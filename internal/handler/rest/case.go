@@ -1075,3 +1075,26 @@ func (r *Rest) CreateClaimClassificationQuestionByAdmin(c *gin.Context) {
 
 	response.Success(c, http.StatusCreated, "claim classification question created", result)
 }
+
+func (r *Rest) ListCasesForUser(c *gin.Context) {
+	user, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.ListUserCasesRequest
+	err = c.ShouldBindQuery(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid list cases request"))
+		return
+	}
+
+	result, err := r.service.CaseService.ListCasesForUser(user.UserID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "cases retrieved", result)
+}

@@ -23,7 +23,7 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 	userService := NewUserService(repository.UserRepository, repository.RoleRepository, repository.UserProfileRepository, repository.AuditLogRepository, bcrypt)
 	authService := NewAuthService(repository.UserRepository, repository.AvatarRepository, repository.UserProfileRepository, repository.RegistrationSessionRepository, repository.RoleRepository, jwtAuth, bcrypt)
 	roleService := NewRoleService(repository.RoleRepository)
-	caseService := NewCaseService(repository.CaseRepository, repository.CaseVersionRepository, repository.CaseEvidenceRepository, repository.CaseQuestionRepository, repository.CaseChatbotConfigRepository, repository.CaseScoringOutcomeRepository, repository.UserRepository, repository.AuditLogRepository, supabase)
+	caseService := NewCaseService(repository.CaseRepository, repository.CaseVersionRepository, repository.CaseEvidenceRepository, repository.CaseQuestionRepository, repository.CaseChatbotConfigRepository, repository.CaseScoringOutcomeRepository, repository.UserRepository, repository.AuditLogRepository, supabase, repository.UserProfileRepository)
 	avatarService := NewAvatarService(repository.AvatarRepository)
 	itemService := NewItemService(repository.ItemRepository, repository.ItemCategoryRepository, repository.UserRepository, repository.AuditLogRepository, supabase)
 	redeemService := NewRedeemService(repository.RedeemItemRepository, repository.RedeemTypeRepository, repository.UserRepository, repository.AuditLogRepository, supabase)

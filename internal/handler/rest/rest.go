@@ -38,6 +38,10 @@ func (r *Rest) MountEndpoint() {
 	auth.POST("/login", r.Login)
 	auth.POST("/login/admin/verify-otp", r.VerifyAdminLoginOtp)
 
+	user := baseUrl.Group("/users")
+	user.Use(r.middleware.AuthenticateUser)
+	user.GET("/cases", r.ListCasesForUser)
+
 	admin := baseUrl.Group("/admin")
 	admin.Use(r.middleware.AuthenticateUser, r.middleware.OnlyAdmin())
 	admin.GET("/users", r.ListAdminUsers)

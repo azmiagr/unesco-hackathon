@@ -20,7 +20,17 @@ import (
 const (
 	minPublishQuestionCount = 5
 	minPublishEvidenceCount = 3
+
+	defaultUserCaseLimit = 10
+	maxUserCaseLimit     = 100
+	newUserCaseWindow    = 7 * 24 * time.Hour
 )
+
+var allowedUserCaseTabs = map[string]bool{
+	model.UserCaseTabAll:        true,
+	model.UserCaseTabInProgress: true,
+	model.UserCaseTabCompleted:  true,
+}
 
 func (s *CaseService) CreateCaseByAdmin(adminUserID uuid.UUID, req model.AdminCreateCaseRequest) (*model.AdminCreateCaseResponse, error) {
 	if adminUserID == uuid.Nil {
@@ -633,6 +643,122 @@ func (s *CaseService) GetCaseDetailByAdmin(caseID uuid.UUID) (*model.AdminCaseDe
 		Case:      *caseDetail,
 		Evidences: evidences,
 	}, nil
+}
+
+func (s *CaseService) ListCasesForUser(userID uuid.UUID, req model.ListUserCasesRequest) (*model.ListUserCasesResponse, error) {
+	if userID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	page := req.Page
+	if page < 1 {
+		page = 1
+	}
+
+	limit := req.Limit
+	if limit < 1 {
+		limit = defaultUserCaseLimit
+	}
+	if limit > maxUserCaseLimit {
+		limit = maxUserCaseLimit
+	}
+
+	tab := strings.ToLower(strings.TrimSpace(req.Tab))
+	if tab == "" {
+		tab = model.UserCaseTabAll
+	}
+	if !allowedUserCaseTabs[tab] {
+		return nil, appErrors.BadRequest("invalid case tab")
+	}
+
+	if tab == model.UserCaseTabInProgress || tab == model.UserCaseTabCompleted {
+		return emptyUserCaseListResponse(page, limit), nil
+	}
+
+	profile, err := s.userProfileRepo.GetUserProfile(s.db, model.GetUserProfileParam{UserID: userID})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("user profile not found")
+		}
+		return nil, appErrors.InternalServer("failed to get user profile")
+	}
+
+	cases, total, err := s.caseRepo.ListPublishedCasesForUser(s.db, model.ListUserCasesParam{
+		Limit:  limit,
+		Offset: (page - 1) * limit,
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to list cases")
+	}
+
+	responses := make([]model.UserCaseCardResponse, 0, len(cases))
+	for _, caseRow := range cases {
+		responses = append(responses, mapUserCaseCardResponse(caseRow, profile))
+	}
+
+	totalPages := 0
+	if total > 0 {
+		totalPages = int(math.Ceil(float64(total) / float64(limit)))
+	}
+
+	return &model.ListUserCasesResponse{
+		Cases: responses,
+		Pagination: model.PaginationResponse{
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		},
+	}, nil
+}
+
+func emptyUserCaseListResponse(page int, limit int) *model.ListUserCasesResponse {
+	return &model.ListUserCasesResponse{
+		Cases: []model.UserCaseCardResponse{},
+		Pagination: model.PaginationResponse{
+			Page:       page,
+			Limit:      limit,
+			Total:      0,
+			TotalPages: 0,
+		},
+	}
+}
+
+func mapUserCaseCardResponse(caseRow model.UserCaseListRow, profile *entity.UserProfile) model.UserCaseCardResponse {
+	accessStatus := model.UserCaseAccessUnlocked
+	progressStatus := model.UserCaseProgressAvailable
+	var lockedReason *string
+
+	if profile.CurrentLevel < caseRow.MinimumLevel {
+		accessStatus = model.UserCaseAccessLocked
+		progressStatus = model.UserCaseProgressLocked
+		reason := fmt.Sprintf("Terkunci sampai level %d", caseRow.MinimumLevel)
+		lockedReason = &reason
+	} else if profile.AuditorReputation < caseRow.MinimumReputation {
+		accessStatus = model.UserCaseAccessLocked
+		progressStatus = model.UserCaseProgressLocked
+		reason := fmt.Sprintf("Butuh reputasi %.0f", caseRow.MinimumReputation)
+		lockedReason = &reason
+	} else if time.Since(caseRow.CreatedAt) <= newUserCaseWindow {
+		progressStatus = model.UserCaseProgressNew
+	}
+
+	return model.UserCaseCardResponse{
+		CaseID:                   caseRow.CaseID,
+		Title:                    caseRow.Title,
+		Slug:                     caseRow.Slug,
+		ShortDescription:         caseRow.ShortDescription,
+		DifficultyLevel:          caseRow.DifficultyLevel,
+		EstimatedDurationMinutes: caseRow.EstimatedDurationMinutes,
+		MinimumLevel:             caseRow.MinimumLevel,
+		MinimumReputation:        caseRow.MinimumReputation,
+		ThumbnailURL:             caseRow.ThumbnailURL,
+		AccessStatus:             accessStatus,
+		ProgressStatus:           progressStatus,
+		LockedReason:             lockedReason,
+		PublishedAt:              caseRow.PublishedAt,
+		CreatedAt:                caseRow.CreatedAt,
+	}
 }
 
 func (s *CaseService) buildPublishRequirements(
