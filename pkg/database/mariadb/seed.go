@@ -13,6 +13,9 @@ func Seed(db *gorm.DB) error {
 	if err := seedRoles(db); err != nil {
 		return err
 	}
+	if err := seedCityStatistics(db); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -45,4 +48,27 @@ func seedRoles(db *gorm.DB) error {
 	}
 
 	return nil
+}
+
+func seedCityStatistics(db *gorm.DB) error {
+	stats := entity.CityStatistics{
+		CityStatisticsID:  uuid.New(),
+		StatKey:           "default",
+		InformationHealth: 70,
+		PublicTrust:       70,
+		SocialStability:   70,
+		PublicWellbeing:   70,
+		VisualState:       "normal",
+	}
+
+	var existing entity.CityStatistics
+	err := db.Where("stat_key = ?", stats.StatKey).First(&existing).Error
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	return db.Create(&stats).Error
 }

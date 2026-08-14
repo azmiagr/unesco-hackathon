@@ -1,0 +1,233 @@
+package service
+
+import (
+	"errors"
+	"math"
+
+	"github.com/azmiagr/unesco-hackathon/entity"
+	"github.com/azmiagr/unesco-hackathon/internal/repository"
+	"github.com/azmiagr/unesco-hackathon/model"
+	"github.com/azmiagr/unesco-hackathon/pkg/database/mariadb"
+	appErrors "github.com/azmiagr/unesco-hackathon/pkg/errors"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+const userLobbyCaseLimit = 5
+
+type ILobbyService interface {
+	GetLobbyForUser(userID uuid.UUID) (*model.UserLobbyResponse, error)
+}
+
+type LobbyService struct {
+	db              *gorm.DB
+	userProfileRepo repository.IUserProfileRepository
+	gameLevelRepo   repository.IGameLevelRepository
+	caseRepo        repository.ICaseRepository
+	cityStatsRepo   repository.ICityStatisticsRepository
+}
+
+func NewLobbyService(
+	userProfileRepo repository.IUserProfileRepository,
+	gameLevelRepo repository.IGameLevelRepository,
+	caseRepo repository.ICaseRepository,
+	cityStatsRepo repository.ICityStatisticsRepository,
+) ILobbyService {
+	return &LobbyService{
+		db:              mariadb.Connection,
+		userProfileRepo: userProfileRepo,
+		gameLevelRepo:   gameLevelRepo,
+		caseRepo:        caseRepo,
+		cityStatsRepo:   cityStatsRepo,
+	}
+}
+
+func (s *LobbyService) GetLobbyForUser(userID uuid.UUID) (*model.UserLobbyResponse, error) {
+	if userID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	profile, err := s.userProfileRepo.GetUserProfileDetail(s.db, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("user profile not found")
+		}
+		return nil, appErrors.InternalServer("failed to get user profile")
+	}
+	if profile == nil {
+		return nil, appErrors.InternalServer("user profile not found")
+	}
+
+	currentLevelNumber := max(profile.CurrentLevel, 1)
+
+	currentLevel, err := s.getCurrentGameLevel(currentLevelNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	nextLevel, err := s.gameLevelRepo.GetNextGameLevel(s.db, currentLevelNumber)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, appErrors.InternalServer("failed to get next level")
+	}
+
+	cityStats, err := s.cityStatsRepo.GetCityStatistics(s.db, model.GetCityStatisticsParam{
+		StatKey: model.CityStatisticsDefaultKey,
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			cityStats = defaultCityStatistics()
+		} else {
+			return nil, appErrors.InternalServer("failed to get city statistics")
+		}
+	}
+	if cityStats == nil {
+		cityStats = defaultCityStatistics()
+	}
+
+	caseRows, _, err := s.caseRepo.ListPublishedCasesForUser(s.db, model.ListUserCasesParam{
+		Limit:  userLobbyCaseLimit,
+		Offset: 0,
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to list lobby cases")
+	}
+
+	cases := make([]model.UserCaseCardResponse, 0, len(caseRows))
+	for _, caseRow := range caseRows {
+		cases = append(cases, mapUserCaseCardResponse(caseRow, &entity.UserProfile{
+			CurrentLevel:      currentLevelNumber,
+			AuditorReputation: profile.AuditorReputation,
+		}))
+	}
+
+	var featuredCase *model.UserCaseCardResponse
+	if len(cases) > 0 {
+		featuredCase = &cases[0]
+	}
+
+	otherCases := []model.UserCaseCardResponse{}
+	if len(cases) > 1 {
+		otherCases = cases[1:]
+	}
+
+	return &model.UserLobbyResponse{
+		Profile: model.UserLobbyProfileResponse{
+			UserID:      profile.UserID,
+			Username:    profile.Username,
+			AvatarID:    profile.AvatarID,
+			AvatarURL:   profile.AvatarURL,
+			Title:       profile.Title,
+			CoinBalance: profile.CoinBalance,
+		},
+		Level:        mapUserLobbyLevelProgress(profile, currentLevelNumber, currentLevel, nextLevel),
+		VisualState:  cityStats.VisualState,
+		CityStats:    mapUserLobbyCityStats(cityStats),
+		FeaturedCase: featuredCase,
+		ContinueCase: nil,
+		OtherCases:   otherCases,
+	}, nil
+}
+
+func defaultCityStatistics() *entity.CityStatistics {
+	return &entity.CityStatistics{
+		StatKey:           model.CityStatisticsDefaultKey,
+		InformationHealth: 70,
+		PublicTrust:       70,
+		SocialStability:   70,
+		PublicWellbeing:   70,
+		VisualState:       "normal",
+	}
+}
+
+func mapUserLobbyCityStats(stats *entity.CityStatistics) []model.UserLobbyCityStatResponse {
+	return []model.UserLobbyCityStatResponse{
+		mapUserLobbyCityStat(model.CityImpactHealth, "Information Health", stats.InformationHealth),
+		mapUserLobbyCityStat(model.CityImpactTrust, "Public Trust", stats.PublicTrust),
+		mapUserLobbyCityStat(model.CityImpactStability, "Social Stability", stats.SocialStability),
+		mapUserLobbyCityStat(model.CityImpactWellbeing, "Public Wellbeing", stats.PublicWellbeing),
+	}
+}
+
+func mapUserLobbyCityStat(key string, label string, value int) model.UserLobbyCityStatResponse {
+	return model.UserLobbyCityStatResponse{
+		Key:    key,
+		Label:  label,
+		Value:  clampCityStat(value),
+		Delta:  0,
+		Status: cityStatStatus(value),
+	}
+}
+
+func clampCityStat(value int) int {
+	return min(max(value, 0), 100)
+}
+
+func cityStatStatus(value int) string {
+	value = clampCityStat(value)
+	if value >= 70 {
+		return "aman"
+	}
+	if value >= 40 {
+		return "terancam"
+	}
+	return "kritis"
+}
+
+func (s *LobbyService) getCurrentGameLevel(currentLevelNumber int) (*entity.GameLevel, error) {
+	if currentLevelNumber < 1 {
+		currentLevelNumber = 1
+	}
+
+	level, err := s.gameLevelRepo.GetGameLevel(s.db, model.GetGameLevelParam{Level: currentLevelNumber})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, appErrors.InternalServer("failed to get current level")
+	}
+
+	return level, nil
+}
+
+func mapUserLobbyLevelProgress(
+	profile *model.UserProfileDetailRow,
+	currentLevelNumber int,
+	currentLevel *entity.GameLevel,
+	nextLevel *entity.GameLevel,
+) model.UserLobbyLevelProgressResponse {
+	currentLevelXP := 0
+	title := profile.Title
+	if currentLevel != nil {
+		currentLevelXP = currentLevel.XPRequired
+		if title == "" {
+			title = currentLevel.Title
+		}
+	}
+
+	nextLevelNumber := currentLevelNumber
+	nextLevelXP := profile.CurrentXP
+	if nextLevel != nil {
+		nextLevelNumber = nextLevel.Level
+		nextLevelXP = nextLevel.XPRequired
+	}
+
+	progressXP := max(profile.CurrentXP-currentLevelXP, 0)
+	remainingXP := max(nextLevelXP-profile.CurrentXP, 0)
+	progressPercent := 100
+	if nextLevelXP > currentLevelXP {
+		progressPercent = int(math.Round(float64(progressXP) / float64(nextLevelXP-currentLevelXP) * 100))
+		progressPercent = min(max(progressPercent, 0), 100)
+	}
+
+	return model.UserLobbyLevelProgressResponse{
+		CurrentLevel:    currentLevelNumber,
+		CurrentXP:       profile.CurrentXP,
+		CurrentLevelXP:  currentLevelXP,
+		NextLevel:       nextLevelNumber,
+		NextLevelXP:     nextLevelXP,
+		ProgressXP:      progressXP,
+		RemainingXP:     remainingXP,
+		ProgressPercent: progressPercent,
+		Title:           title,
+	}
+}

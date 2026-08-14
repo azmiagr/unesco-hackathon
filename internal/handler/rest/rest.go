@@ -40,6 +40,7 @@ func (r *Rest) MountEndpoint() {
 
 	user := baseUrl.Group("/users")
 	user.Use(r.middleware.AuthenticateUser)
+	user.GET("/lobby", r.GetLobbyForUser)
 	user.GET("/cases", r.ListCasesForUser)
 	user.GET("/leaderboard", r.ListLeaderboard)
 	user.GET("/profile", r.GetUserProfile)

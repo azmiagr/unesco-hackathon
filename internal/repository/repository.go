@@ -24,6 +24,7 @@ type Repository struct {
 	GameLevelRepository           IGameLevelRepository
 	AuditLogRepository            IAuditLogRepository
 	RedeemCodeRepository          IRedeemCodeRepository
+	CityStatisticsRepository      ICityStatisticsRepository
 }
 
 func NewRepository(db *gorm.DB) *Repository {
@@ -49,5 +50,6 @@ func NewRepository(db *gorm.DB) *Repository {
 		GameLevelRepository:           NewGameLevelRepository(db),
 		AuditLogRepository:            NewAuditLogRepository(db),
 		RedeemCodeRepository:          NewRedeemCodeRepository(db),
+		CityStatisticsRepository:      NewCityStatisticsRepository(db),
 	}
 }
