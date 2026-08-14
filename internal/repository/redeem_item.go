@@ -17,6 +17,7 @@ type IRedeemItemRepository interface {
 	ListRedeemItemsByNormalizedNameLookup(tx *gorm.DB) ([]entity.RedeemItem, error)
 	GetRedeemItemForUpdate(tx *gorm.DB, redeemItemID uuid.UUID) (*entity.RedeemItem, error)
 	ListRedeemItems(tx *gorm.DB, param model.ListRedeemItemsParam) ([]entity.RedeemItem, int64, error)
+	ListRedeemItemsForUser(tx *gorm.DB, param model.ListRedeemItemsForUserParam) ([]model.UserRedeemItemRow, int64, error)
 	UpdateRedeemItem(tx *gorm.DB, redeemItem *entity.RedeemItem) error
 	DeleteRedeemItem(tx *gorm.DB, redeemItemID uuid.UUID) error
 }
@@ -145,6 +146,69 @@ func (r *RedeemItemRepository) ListRedeemItems(tx *gorm.DB, param model.ListRede
 	return redeemItems, total, nil
 }
 
+func (r *RedeemItemRepository) ListRedeemItemsForUser(tx *gorm.DB, param model.ListRedeemItemsForUserParam) ([]model.UserRedeemItemRow, int64, error) {
+	var rows []model.UserRedeemItemRow
+	var total int64
+
+	query := applyUserRedeemItemFilters(tx.Table("redeem_items"), param)
+	err := query.Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	availableCodes := tx.Table("redeem_codes").
+		Select("redeem_item_id, COUNT(*) AS stock_remaining").
+		Where("deleted_at IS NULL AND claimed_at IS NULL AND expires_at >= UTC_TIMESTAMP()").
+		Group("redeem_item_id")
+
+	err = applyUserRedeemItemFilters(tx.Table("redeem_items"), param).
+		Joins("JOIN redeem_types ON redeem_types.redeem_type_id = redeem_items.redeem_type_id").
+		Joins("LEFT JOIN (?) AS available_codes ON available_codes.redeem_item_id = redeem_items.redeem_item_id", availableCodes).
+		Select(`
+			redeem_items.redeem_item_id,
+			redeem_items.redeem_type_id,
+			redeem_types.code AS type_code,
+			redeem_types.name AS type_name,
+			redeem_items.name,
+			redeem_items.partner_name,
+			redeem_items.description,
+			redeem_items.price_coin,
+			redeem_items.max_claim_per_period,
+			redeem_items.claim_period,
+			redeem_items.minimum_level,
+			redeem_items.image_url,
+			redeem_items.is_stock_visible,
+			COALESCE(available_codes.stock_remaining, 0) AS stock_remaining,
+			COALESCE((
+				SELECT COUNT(*)
+				FROM user_items
+				WHERE user_items.user_id = ?
+				AND user_items.redeem_item_id = redeem_items.redeem_item_id
+				AND user_items.purchase_type = ?
+				AND user_items.purchased_at >= CASE redeem_items.claim_period
+					WHEN 'daily' THEN UTC_DATE()
+					WHEN 'monthly' THEN DATE_FORMAT(UTC_TIMESTAMP(), '%Y-%m-01')
+					ELSE DATE_SUB(UTC_DATE(), INTERVAL WEEKDAY(UTC_DATE()) DAY)
+				END
+				AND user_items.purchased_at < CASE redeem_items.claim_period
+					WHEN 'daily' THEN DATE_ADD(UTC_DATE(), INTERVAL 1 DAY)
+					WHEN 'monthly' THEN DATE_ADD(DATE_FORMAT(UTC_TIMESTAMP(), '%Y-%m-01'), INTERVAL 1 MONTH)
+					ELSE DATE_ADD(DATE_SUB(UTC_DATE(), INTERVAL WEEKDAY(UTC_DATE()) DAY), INTERVAL 7 DAY)
+				END
+			), 0) AS user_claim_count,
+			redeem_items.created_at
+		`, param.UserID, model.UserItemPurchaseTypeRedeem).
+		Order("redeem_items.created_at ASC").
+		Limit(param.Limit).
+		Offset(param.Offset).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return rows, total, nil
+}
+
 func (r *RedeemItemRepository) UpdateRedeemItem(tx *gorm.DB, redeemItem *entity.RedeemItem) error {
 	err := tx.Debug().Save(redeemItem).Error
 	if err != nil {
@@ -163,6 +227,25 @@ func (r *RedeemItemRepository) DeleteRedeemItem(tx *gorm.DB, redeemItemID uuid.U
 	}
 
 	return nil
+}
+
+func applyUserRedeemItemFilters(query *gorm.DB, param model.ListRedeemItemsForUserParam) *gorm.DB {
+	query = query.Where("redeem_items.status = ? AND redeem_items.deleted_at IS NULL", model.RedeemItemStatusActive)
+
+	if param.RedeemItemID != uuid.Nil {
+		query = query.Where("redeem_items.redeem_item_id = ?", param.RedeemItemID)
+	}
+	if param.Search != "" {
+		search := "%" + param.Search + "%"
+		query = query.Where(
+			"redeem_items.name LIKE ? OR redeem_items.partner_name LIKE ? OR redeem_items.description LIKE ?",
+			search,
+			search,
+			search,
+		)
+	}
+
+	return query
 }
 
 func applyRedeemItemFilters(query *gorm.DB, param model.ListRedeemItemsParam) *gorm.DB {

@@ -148,6 +148,7 @@ func (r *UserProfileRepository) GetUserProfileDetail(tx *gorm.DB, userID uuid.UU
 			COALESCE(user_profiles.title, '') AS title,
 			COALESCE(user_profiles.current_level, 0) AS current_level,
 			COALESCE(user_profiles.current_xp, 0) AS current_xp,
+			COALESCE(user_profiles.coin_balance, 0) AS coin_balance,
 			COALESCE(user_profiles.auditor_reputation, 0) AS auditor_reputation,
 			COALESCE(user_profiles.evidence_evaluation_score, 0) AS evidence_evaluation_score,
 			COALESCE(user_profiles.claim_analysis_score, 0) AS claim_analysis_score,

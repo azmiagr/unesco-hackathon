@@ -14,6 +14,9 @@ const (
 	ItemStatusInactive = "inactive"
 	ItemStatusRetired  = "retired"
 
+	UserItemPurchaseTypeShop   = "shop"
+	UserItemPurchaseTypeRedeem = "redeem"
+
 	UserShopItemOwnershipNotOwned = "not_owned"
 	UserShopItemOwnershipOwned    = "owned"
 	UserShopItemOwnershipEquipped = "equipped"
@@ -175,7 +178,8 @@ type UserListShopItemsResponse struct {
 }
 
 type UserPurchaseShopItemResponse struct {
-	Item UserShopItemResponse `json:"item"`
+	Item        UserShopItemResponse `json:"item"`
+	CoinBalance int                  `json:"coin_balance"`
 }
 
 type UserEquipShopItemResponse struct {

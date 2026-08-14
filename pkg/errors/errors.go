@@ -58,6 +58,14 @@ func Conflict(message string) *AppError {
 	}
 }
 
+func TooManyRequests(message string) *AppError {
+	return &AppError{
+		Code:    http.StatusTooManyRequests,
+		Message: message,
+		Err:     errors.New(message),
+	}
+}
+
 func InternalServer(message string) *AppError {
 	return &AppError{
 		Code:    http.StatusInternalServerError,

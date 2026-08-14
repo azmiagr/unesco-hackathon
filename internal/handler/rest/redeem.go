@@ -11,6 +11,51 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func (r *Rest) ListRedeemItemsForUser(c *gin.Context) {
+	user, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	var req model.UserListRedeemItemsRequest
+	err = c.ShouldBindQuery(&req)
+	if err != nil {
+		response.HandleError(c, appErrors.BadRequest("invalid list redeem items request"))
+		return
+	}
+
+	result, err := r.service.RedeemService.ListRedeemItemsForUser(user.UserID, req)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "redeem items retrieved", result)
+}
+
+func (r *Rest) PurchaseRedeemItemForUser(c *gin.Context) {
+	user, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	redeemItemID, err := helper.ParseUUIDParam(c, "redeemItemID", "invalid redeem item id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.RedeemService.PurchaseRedeemItemForUser(user.UserID, redeemItemID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, "redeem item purchased", result)
+}
+
 func (r *Rest) ListRedeemTypesByAdmin(c *gin.Context) {
 	var req model.AdminListRedeemTypesRequest
 	err := c.ShouldBindQuery(&req)

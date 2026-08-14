@@ -76,6 +76,7 @@ func (s *ProfileService) GetUserProfile(userID uuid.UUID) (*model.GetUserProfile
 			Title:             profile.Title,
 			CurrentLevel:      profile.CurrentLevel,
 			CurrentXP:         profile.CurrentXP,
+			CoinBalance:       profile.CoinBalance,
 			AuditorReputation: profile.AuditorReputation,
 			AccuracyPercent:   0,
 			CasesCompleted:    0,

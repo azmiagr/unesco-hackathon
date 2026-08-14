@@ -99,7 +99,7 @@ func (r *ItemRepository) ListVisibleShopItems(tx *gorm.DB, param model.ListVisib
 	}
 
 	err := applyVisibleShopItemFilters(tx.Table("items"), param).
-		Joins("LEFT JOIN user_items ON user_items.item_id = items.item_id AND user_items.user_id = ?", param.UserID).
+		Joins("LEFT JOIN user_items ON user_items.item_id = items.item_id AND user_items.user_id = ? AND user_items.purchase_type = ?", param.UserID, model.UserItemPurchaseTypeShop).
 		Joins("LEFT JOIN user_profiles ON user_profiles.user_id = ?", param.UserID).
 		Select(`
 			items.item_id,

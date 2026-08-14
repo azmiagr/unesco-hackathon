@@ -15,6 +15,7 @@ type IRedeemCodeRepository interface {
 	CreateRedeemCodes(tx *gorm.DB, redeemCodes []entity.RedeemCode) error
 	GetRedeemCode(tx *gorm.DB, param model.GetRedeemCodeParam) (*entity.RedeemCode, error)
 	GetRedeemCodeForUpdate(tx *gorm.DB, param model.GetRedeemCodeParam) (*entity.RedeemCode, error)
+	GetAvailableRedeemCodeForUpdate(tx *gorm.DB, redeemItemID uuid.UUID) (*entity.RedeemCode, error)
 	GetRedeemCodeRow(tx *gorm.DB, redeemCodeID uuid.UUID) (*model.AdminRedeemCodeListRow, error)
 	ListRedeemCodes(tx *gorm.DB, param model.ListRedeemCodesParam) ([]model.AdminRedeemCodeListRow, int64, error)
 	DeleteRedeemCode(tx *gorm.DB, redeemCodeID uuid.UUID) error
@@ -68,6 +69,21 @@ func (r *RedeemCodeRepository) GetRedeemCodeForUpdate(tx *gorm.DB, param model.G
 	)
 
 	err := query.First(&redeemCode).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &redeemCode, nil
+}
+
+func (r *RedeemCodeRepository) GetAvailableRedeemCodeForUpdate(tx *gorm.DB, redeemItemID uuid.UUID) (*entity.RedeemCode, error) {
+	var redeemCode entity.RedeemCode
+
+	err := tx.Model(&entity.RedeemCode{}).
+		Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
+		Where("redeem_item_id = ? AND claimed_at IS NULL AND expires_at >= UTC_TIMESTAMP()", redeemItemID).
+		Order("expires_at ASC, created_at ASC").
+		First(&redeemCode).Error
 	if err != nil {
 		return nil, err
 	}

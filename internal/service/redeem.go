@@ -23,6 +23,8 @@ import (
 const (
 	defaultAdminRedeemItemLimit = 10
 	maxAdminRedeemItemLimit     = 100
+	defaultUserRedeemItemLimit  = 10
+	maxUserRedeemItemLimit      = 100
 	maxRedeemItemImageSize      = 2 * 1024 * 1024
 	defaultAdminRedeemCodeLimit = 10
 	maxAdminRedeemCodeLimit     = 100
@@ -49,6 +51,8 @@ var allowedRedeemCodeStatuses = map[string]bool{
 }
 
 type IRedeemService interface {
+	ListRedeemItemsForUser(userID uuid.UUID, req model.UserListRedeemItemsRequest) (*model.UserListRedeemItemsResponse, error)
+	PurchaseRedeemItemForUser(userID uuid.UUID, redeemItemID uuid.UUID) (*model.UserPurchaseRedeemItemResponse, error)
 	ListRedeemTypesByAdmin(req model.AdminListRedeemTypesRequest) (*model.AdminListRedeemTypesResponse, error)
 	ListRedeemItemsByAdmin(req model.AdminListRedeemItemsRequest) (*model.AdminListRedeemItemsResponse, error)
 	ListRedeemCodesByAdmin(req model.AdminListRedeemCodesRequest) (*model.AdminListRedeemCodesResponse, error)
@@ -62,32 +66,191 @@ type IRedeemService interface {
 }
 
 type RedeemService struct {
-	db             *gorm.DB
-	redeemItemRepo repository.IRedeemItemRepository
-	redeemTypeRepo repository.IRedeemTypeRepository
-	redeemCodeRepo repository.IRedeemCodeRepository
-	userRepo       repository.IUserRepository
-	auditLogRepo   repository.IAuditLogRepository
-	storage        supabase.Interface
+	db              *gorm.DB
+	redeemItemRepo  repository.IRedeemItemRepository
+	redeemTypeRepo  repository.IRedeemTypeRepository
+	redeemCodeRepo  repository.IRedeemCodeRepository
+	userProfileRepo repository.IUserProfileRepository
+	userItemRepo    repository.IUserItemRepository
+	userRepo        repository.IUserRepository
+	auditLogRepo    repository.IAuditLogRepository
+	storage         supabase.Interface
 }
 
 func NewRedeemService(
 	redeemItemRepo repository.IRedeemItemRepository,
 	redeemTypeRepo repository.IRedeemTypeRepository,
 	redeemCodeRepo repository.IRedeemCodeRepository,
+	userProfileRepo repository.IUserProfileRepository,
+	userItemRepo repository.IUserItemRepository,
 	userRepo repository.IUserRepository,
 	auditLogRepo repository.IAuditLogRepository,
 	storage supabase.Interface,
 ) IRedeemService {
 	return &RedeemService{
-		db:             mariadb.Connection,
-		redeemItemRepo: redeemItemRepo,
-		redeemTypeRepo: redeemTypeRepo,
-		redeemCodeRepo: redeemCodeRepo,
-		userRepo:       userRepo,
-		auditLogRepo:   auditLogRepo,
-		storage:        storage,
+		db:              mariadb.Connection,
+		redeemItemRepo:  redeemItemRepo,
+		redeemTypeRepo:  redeemTypeRepo,
+		redeemCodeRepo:  redeemCodeRepo,
+		userProfileRepo: userProfileRepo,
+		userItemRepo:    userItemRepo,
+		userRepo:        userRepo,
+		auditLogRepo:    auditLogRepo,
+		storage:         storage,
 	}
+}
+
+func (s *RedeemService) ListRedeemItemsForUser(userID uuid.UUID, req model.UserListRedeemItemsRequest) (*model.UserListRedeemItemsResponse, error) {
+	if userID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	page := req.Page
+	if page < 1 {
+		page = 1
+	}
+
+	limit := req.Limit
+	if limit < 1 {
+		limit = defaultUserRedeemItemLimit
+	}
+	if limit > maxUserRedeemItemLimit {
+		limit = maxUserRedeemItemLimit
+	}
+
+	rows, total, err := s.redeemItemRepo.ListRedeemItemsForUser(s.db, model.ListRedeemItemsForUserParam{
+		UserID: userID,
+		Search: strings.TrimSpace(req.Search),
+		Limit:  limit,
+		Offset: (page - 1) * limit,
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to list redeem items")
+	}
+
+	items := make([]model.UserRedeemItemResponse, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, mapUserRedeemItemResponse(row))
+	}
+
+	totalPages := 0
+	if total > 0 {
+		totalPages = int(math.Ceil(float64(total) / float64(limit)))
+	}
+
+	return &model.UserListRedeemItemsResponse{
+		Items: items,
+		Pagination: model.PaginationResponse{
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		},
+	}, nil
+}
+
+func (s *RedeemService) PurchaseRedeemItemForUser(userID uuid.UUID, redeemItemID uuid.UUID) (*model.UserPurchaseRedeemItemResponse, error) {
+	if userID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+	if redeemItemID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid redeem item id")
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	profile, err := s.userProfileRepo.GetUserProfileForUpdate(tx, model.GetUserProfileParam{UserID: userID})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("user profile not found")
+		}
+		return nil, appErrors.InternalServer("failed to get user profile")
+	}
+	if profile == nil {
+		return nil, appErrors.InternalServer("user profile not found")
+	}
+
+	redeemItem, err := s.redeemItemRepo.GetRedeemItemForUpdate(tx, redeemItemID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("redeem item not found")
+		}
+		return nil, appErrors.InternalServer("failed to get redeem item")
+	}
+	if redeemItem == nil {
+		return nil, appErrors.InternalServer("redeem item not found")
+	}
+	if redeemItem.Status != model.RedeemItemStatusActive {
+		return nil, appErrors.Conflict("redeem item is not available")
+	}
+	if profile.CurrentLevel < redeemItem.MinimumLevel {
+		return nil, appErrors.Conflict("minimum level not reached")
+	}
+	if profile.CoinBalance < redeemItem.PriceCoin {
+		return nil, appErrors.Conflict("insufficient coin balance")
+	}
+
+	now := time.Now().UTC()
+	periodStart, periodEnd := getRedeemClaimWindow(now, redeemItem.ClaimPeriod)
+	claimCount, err := s.userItemRepo.CountRedeemPurchasesInPeriod(tx, userID, redeemItemID, periodStart, periodEnd)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to check redeem claim limit")
+	}
+	if claimCount >= int64(redeemItem.MaxClaimPerPeriod) {
+		return nil, appErrors.TooManyRequests("claim limit reached")
+	}
+
+	redeemCode, err := s.redeemCodeRepo.GetAvailableRedeemCodeForUpdate(tx, redeemItemID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.Conflict("out of stock")
+		}
+		return nil, appErrors.InternalServer("failed to get redeem code")
+	}
+	if redeemCode == nil {
+		return nil, appErrors.Conflict("out of stock")
+	}
+
+	err = s.redeemCodeRepo.ClaimRedeemCode(tx, redeemCode, userID, now)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to claim redeem code")
+	}
+
+	profile.CoinBalance -= redeemItem.PriceCoin
+	if err := s.userProfileRepo.UpdateUserProfile(tx, profile); err != nil {
+		return nil, appErrors.InternalServer("failed to update coin balance")
+	}
+
+	userItem := &entity.UserItem{
+		UserItemID:   uuid.New(),
+		UserID:       userID,
+		RedeemItemID: &redeemItemID,
+		RedeemCodeID: &redeemCode.RedeemCodeID,
+		PurchaseType: model.UserItemPurchaseTypeRedeem,
+		CoinSpent:    redeemItem.PriceCoin,
+		PurchasedAt:  now,
+	}
+	err = s.userItemRepo.CreateUserItem(tx, userItem)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to save redeem purchase")
+	}
+
+	responseItem, err := s.getUserRedeemItemResponse(tx, userID, redeemItemID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.UserPurchaseRedeemItemResponse{
+		Item:        responseItem,
+		Code:        redeemCode.Code,
+		CoinBalance: profile.CoinBalance,
+	}, nil
 }
 
 func (s *RedeemService) ListRedeemTypesByAdmin(req model.AdminListRedeemTypesRequest) (*model.AdminListRedeemTypesResponse, error) {
@@ -930,6 +1093,40 @@ func normalizeLookupName(name string) string {
 	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(name)), " "))
 }
 
+func getRedeemClaimWindow(now time.Time, claimPeriod string) (time.Time, time.Time) {
+	now = now.UTC()
+
+	switch claimPeriod {
+	case model.RedeemClaimPeriodDaily:
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		return start, start.AddDate(0, 0, 1)
+	case model.RedeemClaimPeriodMonthly:
+		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		return start, start.AddDate(0, 1, 0)
+	default:
+		daysSinceMonday := (int(now.Weekday()) + 6) % 7
+		dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		start := dayStart.AddDate(0, 0, -daysSinceMonday)
+		return start, start.AddDate(0, 0, 7)
+	}
+}
+
+func (s *RedeemService) getUserRedeemItemResponse(tx *gorm.DB, userID uuid.UUID, redeemItemID uuid.UUID) (model.UserRedeemItemResponse, error) {
+	rows, _, err := s.redeemItemRepo.ListRedeemItemsForUser(tx, model.ListRedeemItemsForUserParam{
+		UserID:       userID,
+		RedeemItemID: redeemItemID,
+		Limit:        1,
+	})
+	if err != nil {
+		return model.UserRedeemItemResponse{}, appErrors.InternalServer("failed to get redeem item")
+	}
+	if len(rows) == 0 {
+		return model.UserRedeemItemResponse{}, appErrors.NotFound("redeem item not found")
+	}
+
+	return mapUserRedeemItemResponse(rows[0]), nil
+}
+
 func (s *RedeemService) uploadRedeemItemImage(file *multipart.FileHeader) (string, error) {
 	if file == nil {
 		return "", nil
@@ -946,6 +1143,27 @@ func (s *RedeemService) uploadRedeemItemImage(file *multipart.FileHeader) (strin
 	}
 
 	return url, nil
+}
+
+func mapUserRedeemItemResponse(row model.UserRedeemItemRow) model.UserRedeemItemResponse {
+	return model.UserRedeemItemResponse{
+		RedeemItemID:      row.RedeemItemID,
+		RedeemTypeID:      row.RedeemTypeID,
+		TypeCode:          row.TypeCode,
+		TypeName:          row.TypeName,
+		Name:              row.Name,
+		PartnerName:       row.PartnerName,
+		Description:       row.Description,
+		PriceCoin:         row.PriceCoin,
+		MaxClaimPerPeriod: row.MaxClaimPerPeriod,
+		ClaimPeriod:       row.ClaimPeriod,
+		MinimumLevel:      row.MinimumLevel,
+		ImageURL:          row.ImageURL,
+		IsStockVisible:    row.IsStockVisible,
+		StockRemaining:    row.StockRemaining,
+		UserClaimCount:    row.UserClaimCount,
+		CanPurchase:       row.StockRemaining > 0 && row.UserClaimCount < row.MaxClaimPerPeriod,
+	}
 }
 
 func (s *RedeemService) mapAdminRedeemItemResponse(tx *gorm.DB, redeemItem entity.RedeemItem) (model.AdminRedeemItemResponse, error) {

@@ -384,6 +384,17 @@ func (s *ItemService) PurchaseShopItemForUser(userID uuid.UUID, itemID uuid.UUID
 	tx := s.db.Begin()
 	defer tx.Rollback()
 
+	profile, err := s.userProfileRepo.GetUserProfileForUpdate(tx, model.GetUserProfileParam{UserID: userID})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("user profile not found")
+		}
+		return nil, appErrors.InternalServer("failed to get user profile")
+	}
+	if profile == nil {
+		return nil, appErrors.InternalServer("user profile not found")
+	}
+
 	item, err := s.itemRepo.GetItemForUpdate(tx, itemID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -391,8 +402,14 @@ func (s *ItemService) PurchaseShopItemForUser(userID uuid.UUID, itemID uuid.UUID
 		}
 		return nil, appErrors.InternalServer("failed to get item")
 	}
+	if item == nil {
+		return nil, appErrors.InternalServer("item not found")
+	}
 	if item.Status != model.ItemStatusActive || !item.IsVisible {
 		return nil, appErrors.Conflict("item is not available")
+	}
+	if profile.CoinBalance < item.PriceCoin {
+		return nil, appErrors.Conflict("insufficient coin balance")
 	}
 
 	_, err = s.userItemRepo.GetUserItem(tx, model.GetUserItemParam{UserID: userID, ItemID: itemID})
@@ -405,13 +422,20 @@ func (s *ItemService) PurchaseShopItemForUser(userID uuid.UUID, itemID uuid.UUID
 
 	now := time.Now().UTC()
 	userItem := &entity.UserItem{
-		UserItemID:  uuid.New(),
-		UserID:      userID,
-		ItemID:      itemID,
-		PurchasedAt: now,
+		UserItemID:   uuid.New(),
+		UserID:       userID,
+		ItemID:       &itemID,
+		PurchaseType: model.UserItemPurchaseTypeShop,
+		CoinSpent:    item.PriceCoin,
+		PurchasedAt:  now,
 	}
 	if err := s.userItemRepo.CreateUserItem(tx, userItem); err != nil {
 		return nil, appErrors.Conflict("item already owned")
+	}
+
+	profile.CoinBalance -= item.PriceCoin
+	if err := s.userProfileRepo.UpdateUserProfile(tx, profile); err != nil {
+		return nil, appErrors.InternalServer("failed to update coin balance")
 	}
 
 	responseItem, err := s.getUserShopItemResponse(tx, userID, itemID)
@@ -424,7 +448,8 @@ func (s *ItemService) PurchaseShopItemForUser(userID uuid.UUID, itemID uuid.UUID
 	}
 
 	return &model.UserPurchaseShopItemResponse{
-		Item: responseItem,
+		Item:        responseItem,
+		CoinBalance: profile.CoinBalance,
 	}, nil
 }
 

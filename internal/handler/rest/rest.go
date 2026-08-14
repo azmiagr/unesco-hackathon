@@ -50,6 +50,10 @@ func (r *Rest) MountEndpoint() {
 	shop.POST("/items/:itemID/purchase", r.PurchaseShopItemForUser)
 	shop.PATCH("/items/:itemID/equip", r.EquipShopItemForUser)
 
+	redeem := user.Group("/redeem")
+	redeem.GET("/items", r.ListRedeemItemsForUser)
+	redeem.POST("/items/:redeemItemID/purchase", r.PurchaseRedeemItemForUser)
+
 	admin := baseUrl.Group("/admin")
 	admin.Use(r.middleware.AuthenticateUser, r.middleware.OnlyAdmin())
 	admin.GET("/users", r.ListAdminUsers)

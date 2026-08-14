@@ -41,6 +41,14 @@ type ListRedeemItemsParam struct {
 	Offset       int
 }
 
+type ListRedeemItemsForUserParam struct {
+	UserID       uuid.UUID
+	RedeemItemID uuid.UUID
+	Search       string
+	Limit        int
+	Offset       int
+}
+
 type AdminListRedeemTypesRequest struct {
 	Search string `form:"search"`
 }
@@ -83,6 +91,12 @@ type AdminUpdateRedeemItemRequest struct {
 	Image             *multipart.FileHeader `form:"image"`
 }
 
+type UserListRedeemItemsRequest struct {
+	Search string `form:"search"`
+	Page   int    `form:"page"`
+	Limit  int    `form:"limit"`
+}
+
 type AdminRedeemTypeResponse struct {
 	RedeemTypeID uuid.UUID `json:"redeem_type_id"`
 	Code         string    `json:"code"`
@@ -109,6 +123,44 @@ type AdminRedeemItemResponse struct {
 	UpdatedAt         time.Time               `json:"updated_at"`
 }
 
+type UserRedeemItemRow struct {
+	RedeemItemID      uuid.UUID `json:"redeem_item_id"`
+	RedeemTypeID      uuid.UUID `json:"redeem_type_id"`
+	TypeCode          string    `json:"type_code"`
+	TypeName          string    `json:"type_name"`
+	Name              string    `json:"name"`
+	PartnerName       string    `json:"partner_name"`
+	Description       string    `json:"description"`
+	PriceCoin         int       `json:"price_coin"`
+	MaxClaimPerPeriod int       `json:"max_claim_per_period"`
+	ClaimPeriod       string    `json:"claim_period"`
+	MinimumLevel      int       `json:"minimum_level"`
+	ImageURL          string    `json:"image_url"`
+	IsStockVisible    bool      `json:"is_stock_visible"`
+	StockRemaining    int       `json:"stock_remaining"`
+	UserClaimCount    int       `json:"user_claim_count"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+type UserRedeemItemResponse struct {
+	RedeemItemID      uuid.UUID `json:"redeem_item_id"`
+	RedeemTypeID      uuid.UUID `json:"redeem_type_id"`
+	TypeCode          string    `json:"type_code"`
+	TypeName          string    `json:"type_name"`
+	Name              string    `json:"name"`
+	PartnerName       string    `json:"partner_name"`
+	Description       string    `json:"description"`
+	PriceCoin         int       `json:"price_coin"`
+	MaxClaimPerPeriod int       `json:"max_claim_per_period"`
+	ClaimPeriod       string    `json:"claim_period"`
+	MinimumLevel      int       `json:"minimum_level"`
+	ImageURL          string    `json:"image_url"`
+	IsStockVisible    bool      `json:"is_stock_visible"`
+	StockRemaining    int       `json:"stock_remaining"`
+	UserClaimCount    int       `json:"user_claim_count"`
+	CanPurchase       bool      `json:"can_purchase"`
+}
+
 type AdminListRedeemTypesResponse struct {
 	Types []AdminRedeemTypeResponse `json:"types"`
 }
@@ -132,4 +184,15 @@ type AdminUpdateRedeemItemResponse struct {
 
 type AdminDeleteRedeemItemResponse struct {
 	RedeemItemID uuid.UUID `json:"redeem_item_id"`
+}
+
+type UserListRedeemItemsResponse struct {
+	Items      []UserRedeemItemResponse `json:"items"`
+	Pagination PaginationResponse       `json:"pagination"`
+}
+
+type UserPurchaseRedeemItemResponse struct {
+	Item        UserRedeemItemResponse `json:"item"`
+	Code        string                 `json:"code"`
+	CoinBalance int                    `json:"coin_balance"`
 }

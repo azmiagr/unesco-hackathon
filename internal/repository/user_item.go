@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	"github.com/azmiagr/unesco-hackathon/entity"
 	"github.com/azmiagr/unesco-hackathon/model"
 	"github.com/google/uuid"
@@ -11,6 +13,7 @@ type IUserItemRepository interface {
 	CreateUserItem(tx *gorm.DB, userItem *entity.UserItem) error
 	GetUserItem(tx *gorm.DB, param model.GetUserItemParam) (*entity.UserItem, error)
 	UpdateUserItem(tx *gorm.DB, userItem *entity.UserItem) error
+	CountRedeemPurchasesInPeriod(tx *gorm.DB, userID uuid.UUID, redeemItemID uuid.UUID, start time.Time, end time.Time) (int64, error)
 	ClearEquippedItemsByUserAndCategory(tx *gorm.DB, userID uuid.UUID, categoryCode string) error
 }
 
@@ -46,6 +49,26 @@ func (r *UserItemRepository) GetUserItem(tx *gorm.DB, param model.GetUserItemPar
 
 func (r *UserItemRepository) UpdateUserItem(tx *gorm.DB, userItem *entity.UserItem) error {
 	return tx.Debug().Save(userItem).Error
+}
+
+func (r *UserItemRepository) CountRedeemPurchasesInPeriod(tx *gorm.DB, userID uuid.UUID, redeemItemID uuid.UUID, start time.Time, end time.Time) (int64, error) {
+	var count int64
+
+	err := tx.Model(&entity.UserItem{}).
+		Where(
+			"user_id = ? AND redeem_item_id = ? AND purchase_type = ? AND purchased_at >= ? AND purchased_at < ?",
+			userID,
+			redeemItemID,
+			model.UserItemPurchaseTypeRedeem,
+			start,
+			end,
+		).
+		Count(&count).Error
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }
 
 func (r *UserItemRepository) ClearEquippedItemsByUserAndCategory(tx *gorm.DB, userID uuid.UUID, categoryCode string) error {

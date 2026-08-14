@@ -17,6 +17,7 @@ type UserProfileDetailRow struct {
 	Title                      string     `json:"title"`
 	CurrentLevel               int        `json:"current_level"`
 	CurrentXP                  int        `json:"current_xp"`
+	CoinBalance                int        `json:"coin_balance"`
 	AuditorReputation          float64    `json:"auditor_reputation"`
 	EvidenceEvaluationScore    float64    `json:"evidence_evaluation_score"`
 	ClaimAnalysisScore         float64    `json:"claim_analysis_score"`
@@ -34,6 +35,7 @@ type UserProfileSummaryResponse struct {
 	Title             string     `json:"title"`
 	CurrentLevel      int        `json:"current_level"`
 	CurrentXP         int        `json:"current_xp"`
+	CoinBalance       int        `json:"coin_balance"`
 	AuditorReputation float64    `json:"auditor_reputation"`
 	AccuracyPercent   float64    `json:"accuracy_percent"`
 	CasesCompleted    int        `json:"cases_completed"`

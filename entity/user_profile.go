@@ -13,6 +13,7 @@ type UserProfile struct {
 	Title                      string     `json:"title" gorm:"type:varchar(255)"`
 	CurrentLevel               int        `json:"current_level" gorm:"type:int;default:0"`
 	CurrentXP                  int        `json:"current_xp" gorm:"type:int;default:0"`
+	CoinBalance                int        `json:"coin_balance" gorm:"type:int;not null;default:0"`
 	AuditorReputation          float64    `json:"auditor_reputation" gorm:"type:decimal(8,2);default:0"`
 	EvidenceEvaluationScore    float64    `json:"evidence_evaluation_score" gorm:"type:decimal(5,2);default:0"`
 	ClaimAnalysisScore         float64    `json:"claim_analysis_score" gorm:"type:decimal(5,2);default:0"`
