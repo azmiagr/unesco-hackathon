@@ -1,6 +1,10 @@
 package model
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type GetUserProfileParam struct {
 	UserProfileID uuid.UUID `json:"-"`
@@ -88,4 +92,27 @@ type GetUserProfileResponse struct {
 	Stats         []UserProfileDetectiveStatResponse `json:"stats"`
 	Account       UserProfileAccountResponse         `json:"account"`
 	CaseHistory   UserCaseHistoryResponse            `json:"case_history"`
+}
+
+type ListUserCaseResultHistoryParam struct {
+	UserID uuid.UUID
+	Limit  int
+	Offset int
+}
+
+type UserCaseResultHistoryRow struct {
+	CaseID          uuid.UUID `json:"case_id"`
+	CaseSessionID   uuid.UUID `json:"case_session_id"`
+	Title           string    `json:"title"`
+	DifficultyLevel string    `json:"difficulty_level"`
+	TotalScore      int       `json:"total_score"`
+	OutcomeKey      string    `json:"outcome_key"`
+	OutcomeLabel    string    `json:"outcome_label"`
+	XPGained        int       `json:"xp_gained"`
+	CompletedAt     time.Time `json:"completed_at"`
+}
+
+type UserCaseResultSummaryRow struct {
+	CasesCompleted int     `json:"cases_completed"`
+	AccuracyScore  float64 `json:"accuracy_score"`
 }

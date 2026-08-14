@@ -9,6 +9,7 @@ type AppError struct {
 	Code    int
 	Message string
 	Err     error
+	Data    interface{}
 }
 
 func (e *AppError) Error() string {
@@ -55,6 +56,15 @@ func Conflict(message string) *AppError {
 		Code:    http.StatusConflict,
 		Message: message,
 		Err:     errors.New(message),
+	}
+}
+
+func ConflictWithData(message string, data interface{}) *AppError {
+	return &AppError{
+		Code:    http.StatusConflict,
+		Message: message,
+		Err:     errors.New(message),
+		Data:    data,
 	}
 }
 

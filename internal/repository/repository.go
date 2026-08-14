@@ -13,6 +13,7 @@ type Repository struct {
 	CaseVersionRepository         ICaseVersionRepository
 	CaseEvidenceRepository        ICaseEvidenceRepository
 	CaseQuestionRepository        ICaseQuestionRepository
+	CaseSessionRepository         ICaseSessionRepository
 	CaseChatbotConfigRepository   ICaseChatbotConfigRepository
 	CaseScoringOutcomeRepository  ICaseScoringOutcomeRepository
 	ItemCategoryRepository        IItemCategoryRepository
@@ -39,6 +40,7 @@ func NewRepository(db *gorm.DB) *Repository {
 		CaseVersionRepository:         NewCaseVersionRepository(db),
 		CaseEvidenceRepository:        NewCaseEvidenceRepository(db),
 		CaseQuestionRepository:        NewCaseQuestionRepository(db),
+		CaseSessionRepository:         NewCaseSessionRepository(db),
 		CaseChatbotConfigRepository:   NewCaseChatbotConfigRepository(db),
 		CaseScoringOutcomeRepository:  NewCaseScoringOutcomeRepository(db),
 		ItemCategoryRepository:        NewItemCategoryRepository(db),

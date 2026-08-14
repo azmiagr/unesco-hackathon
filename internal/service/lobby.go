@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"math"
+	"time"
 
 	"github.com/azmiagr/unesco-hackathon/entity"
 	"github.com/azmiagr/unesco-hackathon/internal/repository"
@@ -25,6 +26,7 @@ type LobbyService struct {
 	gameLevelRepo   repository.IGameLevelRepository
 	caseRepo        repository.ICaseRepository
 	cityStatsRepo   repository.ICityStatisticsRepository
+	caseSessionRepo repository.ICaseSessionRepository
 }
 
 func NewLobbyService(
@@ -32,6 +34,7 @@ func NewLobbyService(
 	gameLevelRepo repository.IGameLevelRepository,
 	caseRepo repository.ICaseRepository,
 	cityStatsRepo repository.ICityStatisticsRepository,
+	caseSessionRepo repository.ICaseSessionRepository,
 ) ILobbyService {
 	return &LobbyService{
 		db:              mariadb.Connection,
@@ -39,6 +42,7 @@ func NewLobbyService(
 		gameLevelRepo:   gameLevelRepo,
 		caseRepo:        caseRepo,
 		cityStatsRepo:   cityStatsRepo,
+		caseSessionRepo: caseSessionRepo,
 	}
 }
 
@@ -110,6 +114,11 @@ func (s *LobbyService) GetLobbyForUser(userID uuid.UUID) (*model.UserLobbyRespon
 		otherCases = cases[1:]
 	}
 
+	continueCase, err := s.getContinueCaseForUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
 	return &model.UserLobbyResponse{
 		Profile: model.UserLobbyProfileResponse{
 			UserID:      profile.UserID,
@@ -123,8 +132,84 @@ func (s *LobbyService) GetLobbyForUser(userID uuid.UUID) (*model.UserLobbyRespon
 		VisualState:  cityStats.VisualState,
 		CityStats:    mapUserLobbyCityStats(cityStats),
 		FeaturedCase: featuredCase,
-		ContinueCase: nil,
+		ContinueCase: continueCase,
 		OtherCases:   otherCases,
+	}, nil
+}
+
+func (s *LobbyService) getContinueCaseForUser(userID uuid.UUID) (*model.UserLobbyContinueCaseResponse, error) {
+	sessions, err := s.caseSessionRepo.ListRecentCaseSessions(s.db, model.ListRecentCaseSessionsParam{
+		UserID: userID,
+		Status: model.CaseSessionStatusActive,
+		Limit:  1,
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get active session")
+	}
+	if len(sessions) == 0 {
+		return nil, nil
+	}
+
+	session := sessions[0]
+	snapshot, err := parseGameplaySnapshot(session.SessionSnapshot)
+	if err != nil {
+		return nil, err
+	}
+
+	progressRows, err := s.caseSessionRepo.ListCaseSessionEvidenceProgress(s.db, model.ListCaseSessionEvidenceProgressParam{
+		CaseSessionID: session.CaseSessionID,
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to list evidence progress")
+	}
+	answerRows, err := s.caseSessionRepo.ListCaseSessionAnswers(s.db, model.ListCaseSessionAnswersParam{
+		CaseSessionID: session.CaseSessionID,
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to list answers")
+	}
+
+	requiredQuestionIDs := map[uuid.UUID]bool{}
+	for _, question := range snapshot.Questions {
+		if question.IsRequired {
+			requiredQuestionIDs[question.CaseQuestionID] = true
+		}
+	}
+	answeredRequired := map[uuid.UUID]bool{}
+	for _, answer := range answerRows {
+		if answer.IsFinal && requiredQuestionIDs[answer.CaseQuestionID] {
+			answeredRequired[answer.CaseQuestionID] = true
+		}
+	}
+
+	totalEvidenceCount := len(snapshot.Evidences)
+	requiredQuestionCount := len(requiredQuestionIDs)
+	totalProgressUnits := totalEvidenceCount + requiredQuestionCount
+	completedProgressUnits := len(progressRows) + len(answeredRequired)
+	progressPercent := 0
+	if totalProgressUnits > 0 {
+		progressPercent = int(math.Round(float64(completedProgressUnits) / float64(totalProgressUnits) * 100))
+		progressPercent = min(max(progressPercent, 0), 100)
+	}
+
+	return &model.UserLobbyContinueCaseResponse{
+		CaseID:                   session.CaseID,
+		CaseSessionID:            session.CaseSessionID,
+		CaseVersionID:            session.CaseVersionID,
+		Title:                    snapshot.Case.Title,
+		Slug:                     snapshot.Case.Slug,
+		ShortDescription:         snapshot.Case.ShortDescription,
+		DifficultyLevel:          snapshot.Case.DifficultyLevel,
+		EstimatedDurationMinutes: snapshot.Case.EstimatedDurationMinutes,
+		ThumbnailURL:             snapshot.Case.ThumbnailURL,
+		SessionVersion:           session.SessionVersion,
+		ProgressPercent:          progressPercent,
+		OpenedEvidenceCount:      len(progressRows),
+		TotalEvidenceCount:       totalEvidenceCount,
+		AnsweredQuestionCount:    len(answeredRequired),
+		RequiredQuestionCount:    requiredQuestionCount,
+		LastActivityAt:           session.LastActivityAt.Format(time.RFC3339),
+		StartedAt:                session.StartedAt.Format(time.RFC3339),
 	}, nil
 }
 

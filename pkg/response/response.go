@@ -47,8 +47,23 @@ func Error(ctx *gin.Context, code int, message string, err error) {
 	})
 }
 
+func ErrorWithData(ctx *gin.Context, code int, message string, data interface{}) {
+	ctx.JSON(code, Response{
+		Status: Status{
+			Code:      code,
+			IsSuccess: false,
+		},
+		Message: message,
+		Data:    data,
+	})
+}
+
 func HandleError(c *gin.Context, err error) {
 	if appErr, ok := err.(*errors.AppError); ok {
+		if appErr.Data != nil {
+			ErrorWithData(c, appErr.Code, appErr.Message, appErr.Data)
+			return
+		}
 		Error(c, appErr.Code, appErr.Message, appErr.Err)
 		return
 	}

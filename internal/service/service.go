@@ -20,6 +20,7 @@ type Service struct {
 	LeaderboardService ILeaderboardService
 	ProfileService     IProfileService
 	LobbyService       ILobbyService
+	GameplayService    IGameplayService
 }
 
 func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtAuth jwt.Interface, supabase supabase.Interface) *Service {
@@ -33,8 +34,9 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 	gameConfigService := NewGameConfigService(repository.GameConfigRepository, repository.GameLevelRepository, repository.UserRepository, repository.AuditLogRepository)
 	auditLogService := NewAuditLogService(repository.AuditLogRepository)
 	leaderboardService := NewLeaderboardService(repository.UserProfileRepository)
-	profileService := NewProfileService(repository.UserProfileRepository, repository.GameLevelRepository)
-	lobbyService := NewLobbyService(repository.UserProfileRepository, repository.GameLevelRepository, repository.CaseRepository, repository.CityStatisticsRepository)
+	profileService := NewProfileService(repository.UserProfileRepository, repository.GameLevelRepository, repository.CaseSessionRepository)
+	lobbyService := NewLobbyService(repository.UserProfileRepository, repository.GameLevelRepository, repository.CaseRepository, repository.CityStatisticsRepository, repository.CaseSessionRepository)
+	gameplayService := NewGameplayService(repository.CaseRepository, repository.CaseVersionRepository, repository.CaseEvidenceRepository, repository.CaseQuestionRepository, repository.CaseSessionRepository, repository.UserProfileRepository, repository.GameConfigRepository, repository.CaseScoringOutcomeRepository, repository.GameLevelRepository, repository.CityStatisticsRepository)
 
 	return &Service{
 		UserService:        userService,
@@ -49,5 +51,6 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 		LeaderboardService: leaderboardService,
 		ProfileService:     profileService,
 		LobbyService:       lobbyService,
+		GameplayService:    gameplayService,
 	}
 }

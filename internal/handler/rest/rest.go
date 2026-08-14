@@ -42,9 +42,16 @@ func (r *Rest) MountEndpoint() {
 	user.Use(r.middleware.AuthenticateUser)
 	user.GET("/lobby", r.GetLobbyForUser)
 	user.GET("/cases", r.ListCasesForUser)
+	user.POST("/cases/:caseID/sessions", r.StartCaseSessionForUser)
 	user.GET("/leaderboard", r.ListLeaderboard)
 	user.GET("/profile", r.GetUserProfile)
 	user.GET("/item-categories", r.ListItemCategoriesForUser)
+
+	sessions := user.Group("/sessions")
+	sessions.GET("/:sessionID/gameplay", r.GetGameplayStateForUser)
+	sessions.POST("/:sessionID/evidences/:caseEvidenceID/open", r.OpenEvidenceForUser)
+	sessions.PUT("/:sessionID/answers", r.SaveAnswersForUser)
+	sessions.POST("/:sessionID/submit", r.SubmitCaseSessionForUser)
 
 	shop := user.Group("/shop")
 	shop.GET("/items", r.ListShopItemsForUser)
