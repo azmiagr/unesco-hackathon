@@ -47,6 +47,7 @@ func (r *Rest) MountEndpoint() {
 
 	shop := user.Group("/shop")
 	shop.GET("/items", r.ListShopItemsForUser)
+	shop.GET("/items/:itemID", r.GetShopItemDetailForUser)
 	shop.POST("/items/:itemID/purchase", r.PurchaseShopItemForUser)
 	shop.PATCH("/items/:itemID/equip", r.EquipShopItemForUser)
 

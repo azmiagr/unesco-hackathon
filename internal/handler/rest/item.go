@@ -84,6 +84,28 @@ func (r *Rest) ListShopItemsForUser(c *gin.Context) {
 	response.Success(c, http.StatusOK, "shop items retrieved", result)
 }
 
+func (r *Rest) GetShopItemDetailForUser(c *gin.Context) {
+	user, err := helper.GetAuthenticatedUser(c)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	itemID, err := helper.ParseUUIDParam(c, "itemID", "invalid item id")
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	result, err := r.service.ItemService.GetShopItemDetailForUser(user.UserID, itemID)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "shop item detail retrieved", result)
+}
+
 func (r *Rest) PurchaseShopItemForUser(c *gin.Context) {
 	user, err := helper.GetAuthenticatedUser(c)
 	if err != nil {

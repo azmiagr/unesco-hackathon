@@ -38,6 +38,7 @@ type IItemService interface {
 	ListItemCategoriesForUser(req model.UserListItemCategoriesRequest) (*model.UserListItemCategoriesResponse, error)
 	ListItemsByAdmin(req model.AdminListItemsRequest) (*model.AdminListItemsResponse, error)
 	ListShopItemsForUser(userID uuid.UUID, req model.UserListShopItemsRequest) (*model.UserListShopItemsResponse, error)
+	GetShopItemDetailForUser(userID uuid.UUID, itemID uuid.UUID) (*model.UserGetShopItemDetailResponse, error)
 	GetItemDetailByAdmin(itemID uuid.UUID) (*model.AdminGetItemDetailResponse, error)
 	CreateItemByAdmin(adminUserID uuid.UUID, req model.AdminCreateItemRequest) (*model.AdminCreateItemResponse, error)
 	PurchaseShopItemForUser(userID uuid.UUID, itemID uuid.UUID) (*model.UserPurchaseShopItemResponse, error)
@@ -233,6 +234,62 @@ func (s *ItemService) ListShopItemsForUser(userID uuid.UUID, req model.UserListS
 			Total:      total,
 			TotalPages: totalPages,
 		},
+	}, nil
+}
+
+func (s *ItemService) GetShopItemDetailForUser(userID uuid.UUID, itemID uuid.UUID) (*model.UserGetShopItemDetailResponse, error) {
+	if userID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+	if itemID == uuid.Nil {
+		return nil, appErrors.BadRequest("invalid item id")
+	}
+
+	profile, err := s.userProfileRepo.GetUserProfile(s.db, model.GetUserProfileParam{UserID: userID})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("user profile not found")
+		}
+		return nil, appErrors.InternalServer("failed to get user profile")
+	}
+	if profile == nil {
+		return nil, appErrors.InternalServer("user profile not found")
+	}
+
+	rows, _, err := s.itemRepo.ListVisibleShopItems(s.db, model.ListVisibleShopItemsParam{
+		UserID: userID,
+		ItemID: itemID,
+		Limit:  1,
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get shop item")
+	}
+	if len(rows) == 0 {
+		return nil, appErrors.NotFound("shop item not found")
+	}
+
+	item := mapUserShopItemResponse(rows[0])
+
+	relatedRows, _, err := s.itemRepo.ListVisibleShopItems(s.db, model.ListVisibleShopItemsParam{
+		UserID:        userID,
+		ExcludeItemID: itemID,
+		CategoryCode:  rows[0].CategoryCode,
+		Limit:         4,
+		Random:        true,
+	})
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get related shop items")
+	}
+
+	relatedItems := make([]model.UserShopItemResponse, 0, len(relatedRows))
+	for _, row := range relatedRows {
+		relatedItems = append(relatedItems, mapUserShopItemResponse(row))
+	}
+
+	return &model.UserGetShopItemDetailResponse{
+		Item:         item,
+		RelatedItems: relatedItems,
+		CoinBalance:  profile.CoinBalance,
 	}, nil
 }
 

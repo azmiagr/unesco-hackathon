@@ -52,12 +52,14 @@ type ListItemsParam struct {
 }
 
 type ListVisibleShopItemsParam struct {
-	UserID       uuid.UUID
-	ItemID       uuid.UUID
-	Search       string
-	CategoryCode string
-	Limit        int
-	Offset       int
+	UserID        uuid.UUID
+	ItemID        uuid.UUID
+	ExcludeItemID uuid.UUID
+	Search        string
+	CategoryCode  string
+	Limit         int
+	Offset        int
+	Random        bool
 }
 
 type AdminListItemsRequest struct {
@@ -175,6 +177,12 @@ type AdminListItemsResponse struct {
 type UserListShopItemsResponse struct {
 	Items      []UserShopItemResponse `json:"items"`
 	Pagination PaginationResponse     `json:"pagination"`
+}
+
+type UserGetShopItemDetailResponse struct {
+	Item         UserShopItemResponse   `json:"item"`
+	RelatedItems []UserShopItemResponse `json:"related_items"`
+	CoinBalance  int                    `json:"coin_balance"`
 }
 
 type UserPurchaseShopItemResponse struct {

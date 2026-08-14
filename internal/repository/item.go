@@ -98,7 +98,7 @@ func (r *ItemRepository) ListVisibleShopItems(tx *gorm.DB, param model.ListVisib
 		return nil, 0, err
 	}
 
-	err := applyVisibleShopItemFilters(tx.Table("items"), param).
+	query = applyVisibleShopItemFilters(tx.Table("items"), param).
 		Joins("LEFT JOIN user_items ON user_items.item_id = items.item_id AND user_items.user_id = ? AND user_items.purchase_type = ?", param.UserID, model.UserItemPurchaseTypeShop).
 		Joins("LEFT JOIN user_profiles ON user_profiles.user_id = ?", param.UserID).
 		Select(`
@@ -115,9 +115,15 @@ func (r *ItemRepository) ListVisibleShopItems(tx *gorm.DB, param model.ListVisib
 			user_items.equipped_at,
 			user_profiles.avatar_id AS current_avatar_id,
 			items.created_at
-		`).
-		Order("items.created_at ASC").
-		Limit(param.Limit).
+		`)
+
+	if param.Random {
+		query = query.Order("RAND()")
+	} else {
+		query = query.Order("items.created_at ASC")
+	}
+
+	err := query.Limit(param.Limit).
 		Offset(param.Offset).
 		Scan(&rows).Error
 	if err != nil {
@@ -183,6 +189,9 @@ func applyVisibleShopItemFilters(query *gorm.DB, param model.ListVisibleShopItem
 	}
 	if param.ItemID != uuid.Nil {
 		query = query.Where("items.item_id = ?", param.ItemID)
+	}
+	if param.ExcludeItemID != uuid.Nil {
+		query = query.Where("items.item_id <> ?", param.ExcludeItemID)
 	}
 	if param.CategoryCode != "" {
 		query = query.Where("item_categories.code = ?", param.CategoryCode)
