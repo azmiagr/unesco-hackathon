@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"time"
@@ -87,6 +88,10 @@ func (s *LobbyService) GetLobbyForUser(userID uuid.UUID) (*model.UserLobbyRespon
 	if cityStats == nil {
 		cityStats = defaultCityStatistics()
 	}
+	cityStatDeltas, err := s.getLatestCityStatDeltas(userID)
+	if err != nil {
+		return nil, err
+	}
 
 	caseRows, _, err := s.caseRepo.ListPublishedCasesForUser(s.db, model.ListUserCasesParam{
 		Limit:  userLobbyCaseLimit,
@@ -130,7 +135,7 @@ func (s *LobbyService) GetLobbyForUser(userID uuid.UUID) (*model.UserLobbyRespon
 		},
 		Level:        mapUserLobbyLevelProgress(profile, currentLevelNumber, currentLevel, nextLevel),
 		VisualState:  cityStats.VisualState,
-		CityStats:    mapUserLobbyCityStats(cityStats),
+		CityStats:    mapUserLobbyCityStats(cityStats, cityStatDeltas),
 		FeaturedCase: featuredCase,
 		ContinueCase: continueCase,
 		OtherCases:   otherCases,
@@ -224,21 +229,43 @@ func defaultCityStatistics() *entity.CityStatistics {
 	}
 }
 
-func mapUserLobbyCityStats(stats *entity.CityStatistics) []model.UserLobbyCityStatResponse {
+func (s *LobbyService) getLatestCityStatDeltas(userID uuid.UUID) (map[string]int, error) {
+	result, err := s.caseSessionRepo.GetLatestUserCaseSessionResult(s.db, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return map[string]int{}, nil
+		}
+		return nil, appErrors.InternalServer("failed to get latest city impact")
+	}
+
+	var impacts []model.GameplayCityImpactResponse
+	if err := json.Unmarshal([]byte(result.CityImpact), &impacts); err != nil {
+		return nil, appErrors.InternalServer("failed to parse latest city impact")
+	}
+
+	deltas := make(map[string]int, len(impacts))
+	for _, impact := range impacts {
+		deltas[impact.Key] = impact.Delta
+	}
+
+	return deltas, nil
+}
+
+func mapUserLobbyCityStats(stats *entity.CityStatistics, deltas map[string]int) []model.UserLobbyCityStatResponse {
 	return []model.UserLobbyCityStatResponse{
-		mapUserLobbyCityStat(model.CityImpactHealth, "Information Health", stats.InformationHealth),
-		mapUserLobbyCityStat(model.CityImpactTrust, "Public Trust", stats.PublicTrust),
-		mapUserLobbyCityStat(model.CityImpactStability, "Social Stability", stats.SocialStability),
-		mapUserLobbyCityStat(model.CityImpactWellbeing, "Public Wellbeing", stats.PublicWellbeing),
+		mapUserLobbyCityStat(model.CityImpactHealth, "Information Health", stats.InformationHealth, deltas[model.CityImpactHealth]),
+		mapUserLobbyCityStat(model.CityImpactTrust, "Public Trust", stats.PublicTrust, deltas[model.CityImpactTrust]),
+		mapUserLobbyCityStat(model.CityImpactStability, "Social Stability", stats.SocialStability, deltas[model.CityImpactStability]),
+		mapUserLobbyCityStat(model.CityImpactWellbeing, "Public Wellbeing", stats.PublicWellbeing, deltas[model.CityImpactWellbeing]),
 	}
 }
 
-func mapUserLobbyCityStat(key string, label string, value int) model.UserLobbyCityStatResponse {
+func mapUserLobbyCityStat(key string, label string, value int, delta int) model.UserLobbyCityStatResponse {
 	return model.UserLobbyCityStatResponse{
 		Key:    key,
 		Label:  label,
 		Value:  clampCityStat(value),
-		Delta:  0,
+		Delta:  delta,
 		Status: cityStatStatus(value),
 	}
 }

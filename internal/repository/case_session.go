@@ -36,6 +36,7 @@ type ICaseSessionRepository interface {
 	DeleteExpiredCaseSessionIdempotencyKeys(tx *gorm.DB, now time.Time) error
 	CreateCaseSessionResult(tx *gorm.DB, result *entity.CaseSessionResult) error
 	GetCaseSessionResult(tx *gorm.DB, caseSessionID uuid.UUID) (*entity.CaseSessionResult, error)
+	GetLatestUserCaseSessionResult(tx *gorm.DB, userID uuid.UUID) (*entity.CaseSessionResult, error)
 	ListUserCaseResultHistory(tx *gorm.DB, param model.ListUserCaseResultHistoryParam) ([]model.UserCaseResultHistoryRow, error)
 	GetUserCaseResultSummary(tx *gorm.DB, userID uuid.UUID) (*model.UserCaseResultSummaryRow, error)
 	ListUserCaseCompletionDates(tx *gorm.DB, userID uuid.UUID) ([]time.Time, error)
@@ -444,6 +445,21 @@ func (r *CaseSessionRepository) GetCaseSessionResult(tx *gorm.DB, caseSessionID 
 	return &result, nil
 }
 
+func (r *CaseSessionRepository) GetLatestUserCaseSessionResult(tx *gorm.DB, userID uuid.UUID) (*entity.CaseSessionResult, error) {
+	var result entity.CaseSessionResult
+	err := tx.Model(&entity.CaseSessionResult{}).
+		Joins("JOIN case_sessions ON case_sessions.case_session_id = case_session_results.case_session_id").
+		Where("case_session_results.user_id = ?", userID).
+		Where("case_sessions.status = ?", model.CaseSessionStatusCompleted).
+		Where("case_sessions.submitted_at IS NOT NULL").
+		Order("case_sessions.submitted_at DESC").
+		First(&result).Error
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 func (r *CaseSessionRepository) ListUserCaseResultHistory(tx *gorm.DB, param model.ListUserCaseResultHistoryParam) ([]model.UserCaseResultHistoryRow, error) {
 	var rows []model.UserCaseResultHistoryRow
 	query := tx.Table("case_session_results").
@@ -457,6 +473,7 @@ func (r *CaseSessionRepository) ListUserCaseResultHistory(tx *gorm.DB, param mod
 			case_session_results.case_session_id,
 			cases.title,
 			cases.difficulty_level,
+			cases.status AS case_status,
 			case_session_results.total_score,
 			case_session_results.outcome_key,
 			case_session_results.outcome_label,

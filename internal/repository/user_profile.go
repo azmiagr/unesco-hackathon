@@ -16,6 +16,7 @@ type IUserProfileRepository interface {
 	ListLeaderboard(tx *gorm.DB, param model.ListLeaderboardParam) ([]model.LeaderboardEntryRow, int64, error)
 	GetUserLeaderboardRank(tx *gorm.DB, userID uuid.UUID) (*model.LeaderboardEntryRow, error)
 	GetUserProfileDetail(tx *gorm.DB, userID uuid.UUID) (*model.UserProfileDetailRow, error)
+	GetDetectiveStatAverages(tx *gorm.DB) (*model.UserProfileDetectiveStatAverageRow, error)
 }
 
 type UserProfileRepository struct {
@@ -142,6 +143,7 @@ func (r *UserProfileRepository) GetUserProfileDetail(tx *gorm.DB, userID uuid.UU
 			users.user_id,
 			users.username,
 			users.email,
+			users.status,
 			user_profiles.user_profile_id,
 			user_profiles.avatar_id,
 			COALESCE(avatars.image_url, '') AS avatar_url,
@@ -165,4 +167,25 @@ func (r *UserProfileRepository) GetUserProfileDetail(tx *gorm.DB, userID uuid.UU
 	}
 
 	return &profile, nil
+}
+
+func (r *UserProfileRepository) GetDetectiveStatAverages(tx *gorm.DB) (*model.UserProfileDetectiveStatAverageRow, error) {
+	var row model.UserProfileDetectiveStatAverageRow
+
+	err := tx.Table("user_profiles").
+		Joins("JOIN users ON users.user_id = user_profiles.user_id").
+		Where("users.status = ?", "active").
+		Select(`
+			COALESCE(AVG(user_profiles.evidence_evaluation_score), 0) AS evidence_evaluation_average,
+			COALESCE(AVG(user_profiles.claim_analysis_score), 0) AS claim_analysis_average,
+			COALESCE(AVG(user_profiles.confidence_calibration_score), 0) AS confidence_calibration_average,
+			COALESCE(AVG(user_profiles.reasoning_score), 0) AS reasoning_average,
+			COALESCE(AVG(user_profiles.safety_judgment_score), 0) AS safety_judgment_average
+		`).
+		Scan(&row).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &row, nil
 }

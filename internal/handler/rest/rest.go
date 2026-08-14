@@ -65,6 +65,7 @@ func (r *Rest) MountEndpoint() {
 
 	admin := baseUrl.Group("/admin")
 	admin.Use(r.middleware.AuthenticateUser, r.middleware.OnlyAdmin())
+	admin.GET("/dashboard", r.GetDashboardByAdmin)
 	admin.GET("/users", r.ListAdminUsers)
 	admin.GET("/users/:userID", r.GetAdminUserDetail)
 	admin.GET("roles", r.GetAllRoles)

@@ -15,6 +15,7 @@ type UserProfileDetailRow struct {
 	UserID                     uuid.UUID  `json:"user_id"`
 	Username                   string     `json:"username"`
 	Email                      string     `json:"email"`
+	Status                     string     `json:"status"`
 	UserProfileID              uuid.UUID  `json:"user_profile_id"`
 	AvatarID                   *uuid.UUID `json:"avatar_id"`
 	AvatarURL                  string     `json:"avatar_url"`
@@ -105,6 +106,7 @@ type UserCaseResultHistoryRow struct {
 	CaseSessionID   uuid.UUID `json:"case_session_id"`
 	Title           string    `json:"title"`
 	DifficultyLevel string    `json:"difficulty_level"`
+	CaseStatus      string    `json:"case_status"`
 	TotalScore      int       `json:"total_score"`
 	OutcomeKey      string    `json:"outcome_key"`
 	OutcomeLabel    string    `json:"outcome_label"`
@@ -115,4 +117,12 @@ type UserCaseResultHistoryRow struct {
 type UserCaseResultSummaryRow struct {
 	CasesCompleted int     `json:"cases_completed"`
 	AccuracyScore  float64 `json:"accuracy_score"`
+}
+
+type UserProfileDetectiveStatAverageRow struct {
+	EvidenceEvaluationAverage    float64 `json:"evidence_evaluation_average"`
+	ClaimAnalysisAverage         float64 `json:"claim_analysis_average"`
+	ConfidenceCalibrationAverage float64 `json:"confidence_calibration_average"`
+	ReasoningAverage             float64 `json:"reasoning_average"`
+	SafetyJudgmentAverage        float64 `json:"safety_judgment_average"`
 }

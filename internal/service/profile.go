@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -96,6 +97,10 @@ func (s *ProfileService) GetUserProfile(userID uuid.UUID) (*model.GetUserProfile
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to get completion streak")
 	}
+	statAverages, err := s.userProfileRepo.GetDetectiveStatAverages(s.db)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to get detective stat averages")
+	}
 
 	return &model.GetUserProfileResponse{
 		Profile: model.UserProfileSummaryResponse{
@@ -116,15 +121,15 @@ func (s *ProfileService) GetUserProfile(userID uuid.UUID) (*model.GetUserProfile
 		},
 		LevelProgress: levelProgress,
 		Stats: []model.UserProfileDetectiveStatResponse{
-			{Key: "evidence_evaluation", Label: "Evidence Evaluation", Score: profile.EvidenceEvaluationScore, Average: 74},
-			{Key: "claim_analysis", Label: "Claim Analysis", Score: profile.ClaimAnalysisScore, Average: 74},
-			{Key: "confidence_calibration", Label: "Confidence Calibration", Score: profile.ConfidenceCalibrationScore, Average: 74},
-			{Key: "reasoning", Label: "Reasoning", Score: profile.ReasoningScore, Average: 74},
-			{Key: "safety_judgment", Label: "Safety Judgment", Score: profile.SafetyJudgmentScore, Average: 74},
+			{Key: "evidence_evaluation", Label: "Evidence Evaluation", Score: profile.EvidenceEvaluationScore, Average: roundFloat(statAverages.EvidenceEvaluationAverage, 2)},
+			{Key: "claim_analysis", Label: "Claim Analysis", Score: profile.ClaimAnalysisScore, Average: roundFloat(statAverages.ClaimAnalysisAverage, 2)},
+			{Key: "confidence_calibration", Label: "Confidence Calibration", Score: profile.ConfidenceCalibrationScore, Average: roundFloat(statAverages.ConfidenceCalibrationAverage, 2)},
+			{Key: "reasoning", Label: "Reasoning", Score: profile.ReasoningScore, Average: roundFloat(statAverages.ReasoningAverage, 2)},
+			{Key: "safety_judgment", Label: "Safety Judgment", Score: profile.SafetyJudgmentScore, Average: roundFloat(statAverages.SafetyJudgmentAverage, 2)},
 		},
 		Account: model.UserProfileAccountResponse{
 			Email:           profile.Email,
-			IsEmailVerified: true,
+			IsEmailVerified: profile.Status == "active",
 			ConnectedTo:     defaultConnectedProvider,
 		},
 		CaseHistory: model.UserCaseHistoryResponse{
@@ -161,7 +166,7 @@ func mapUserProfileLevelProgress(profile *model.UserProfileDetailRow, currentLev
 		RemainingXP:     remainingXP,
 		ProgressXP:      progressXP,
 		ProgressPercent: progressPercent,
-		NextUnlockText:  defaultNextUnlockText,
+		NextUnlockText:  buildNextUnlockText(nextLevel, nextLevelXP),
 	}
 }
 
@@ -176,10 +181,17 @@ func mapUserCaseHistory(rows []model.UserCaseResultHistoryRow) []model.UserCaseH
 			XPReward:        row.XPGained,
 			ResultStatus:    row.OutcomeLabel,
 			ScoreLabel:      mapScoreLabel(row.TotalScore),
-			IsRetryable:     true,
+			IsRetryable:     row.CaseStatus == model.CaseStatusPublished,
 		})
 	}
 	return items
+}
+
+func buildNextUnlockText(nextLevel int, nextLevelXP int) string {
+	if nextLevel <= 0 || nextLevelXP <= 0 {
+		return defaultNextUnlockText
+	}
+	return "Level " + strconv.Itoa(nextLevel) + " terbuka di " + strconv.Itoa(nextLevelXP) + " XP"
 }
 
 func mapDifficultyLabel(difficulty string) string {

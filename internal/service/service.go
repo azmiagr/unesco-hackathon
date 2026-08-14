@@ -8,19 +8,20 @@ import (
 )
 
 type Service struct {
-	UserService        IUserService
-	AuthService        IAuthService
-	RoleService        IRoleService
-	CaseService        ICaseService
-	AvatarService      IAvatarService
-	ItemService        IItemService
-	RedeemService      IRedeemService
-	GameConfigService  IGameConfigService
-	AuditLogService    IAuditLogService
-	LeaderboardService ILeaderboardService
-	ProfileService     IProfileService
-	LobbyService       ILobbyService
-	GameplayService    IGameplayService
+	UserService           IUserService
+	AuthService           IAuthService
+	RoleService           IRoleService
+	CaseService           ICaseService
+	AvatarService         IAvatarService
+	ItemService           IItemService
+	RedeemService         IRedeemService
+	GameConfigService     IGameConfigService
+	AuditLogService       IAuditLogService
+	AdminDashboardService IAdminDashboardService
+	LeaderboardService    ILeaderboardService
+	ProfileService        IProfileService
+	LobbyService          ILobbyService
+	GameplayService       IGameplayService
 }
 
 func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtAuth jwt.Interface, supabase supabase.Interface) *Service {
@@ -33,24 +34,26 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 	redeemService := NewRedeemService(repository.RedeemItemRepository, repository.RedeemTypeRepository, repository.RedeemCodeRepository, repository.UserProfileRepository, repository.UserItemRepository, repository.UserRepository, repository.AuditLogRepository, supabase)
 	gameConfigService := NewGameConfigService(repository.GameConfigRepository, repository.GameLevelRepository, repository.UserRepository, repository.AuditLogRepository)
 	auditLogService := NewAuditLogService(repository.AuditLogRepository)
+	adminDashboardService := NewAdminDashboardService(repository.AdminDashboardRepository)
 	leaderboardService := NewLeaderboardService(repository.UserProfileRepository)
 	profileService := NewProfileService(repository.UserProfileRepository, repository.GameLevelRepository, repository.CaseSessionRepository)
 	lobbyService := NewLobbyService(repository.UserProfileRepository, repository.GameLevelRepository, repository.CaseRepository, repository.CityStatisticsRepository, repository.CaseSessionRepository)
 	gameplayService := NewGameplayService(repository.CaseRepository, repository.CaseVersionRepository, repository.CaseEvidenceRepository, repository.CaseQuestionRepository, repository.CaseSessionRepository, repository.UserProfileRepository, repository.GameConfigRepository, repository.CaseScoringOutcomeRepository, repository.GameLevelRepository, repository.CityStatisticsRepository)
 
 	return &Service{
-		UserService:        userService,
-		AuthService:        authService,
-		RoleService:        roleService,
-		CaseService:        caseService,
-		AvatarService:      avatarService,
-		ItemService:        itemService,
-		RedeemService:      redeemService,
-		GameConfigService:  gameConfigService,
-		AuditLogService:    auditLogService,
-		LeaderboardService: leaderboardService,
-		ProfileService:     profileService,
-		LobbyService:       lobbyService,
-		GameplayService:    gameplayService,
+		UserService:           userService,
+		AuthService:           authService,
+		RoleService:           roleService,
+		CaseService:           caseService,
+		AvatarService:         avatarService,
+		ItemService:           itemService,
+		RedeemService:         redeemService,
+		GameConfigService:     gameConfigService,
+		AuditLogService:       auditLogService,
+		AdminDashboardService: adminDashboardService,
+		LeaderboardService:    leaderboardService,
+		ProfileService:        profileService,
+		LobbyService:          lobbyService,
+		GameplayService:       gameplayService,
 	}
 }
