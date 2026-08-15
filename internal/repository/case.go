@@ -19,6 +19,7 @@ type ICaseRepository interface {
 	HardDeleteCase(tx *gorm.DB, caseID uuid.UUID) error
 	CaseExists(tx *gorm.DB, param model.GetCaseParam) (bool, error)
 	ListPublishedCasesForUser(tx *gorm.DB, param model.ListUserCasesParam) ([]model.UserCaseListRow, int64, error)
+	ListUserCasesBySessionStatus(tx *gorm.DB, param model.ListUserCasesBySessionStatusParam) ([]model.UserCaseListRow, int64, error)
 }
 
 type CaseRepository struct {
@@ -271,6 +272,61 @@ func (r *CaseRepository) ListPublishedCasesForUser(tx *gorm.DB, param model.List
 			cases.created_at
 		`).
 		Order("cases.published_at DESC, cases.created_at DESC").
+		Limit(param.Limit).
+		Offset(param.Offset).
+		Scan(&cases).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return cases, total, nil
+}
+
+func (r *CaseRepository) ListUserCasesBySessionStatus(tx *gorm.DB, param model.ListUserCasesBySessionStatusParam) ([]model.UserCaseListRow, int64, error) {
+	var cases []model.UserCaseListRow
+	var total int64
+
+	baseQuery := tx.Table("case_sessions").
+		Joins("JOIN cases ON cases.case_id = case_sessions.case_id").
+		Where("case_sessions.user_id = ?", param.UserID).
+		Where("case_sessions.status = ?", param.Status)
+
+	if err := baseQuery.Distinct("case_sessions.case_id").Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := tx.Table("case_sessions").
+		Joins("JOIN cases ON cases.case_id = case_sessions.case_id").
+		Where("case_sessions.user_id = ?", param.UserID).
+		Where("case_sessions.status = ?", param.Status).
+		Select(`
+			cases.case_id,
+			cases.title,
+			cases.slug,
+			cases.short_description,
+			cases.difficulty_level,
+			cases.estimated_duration_minutes,
+			cases.minimum_level,
+			cases.minimum_reputation,
+			cases.thumbnail_url,
+			cases.published_at,
+			cases.created_at,
+			MAX(COALESCE(case_sessions.submitted_at, case_sessions.last_activity_at)) AS session_activity
+		`).
+		Group(`
+			cases.case_id,
+			cases.title,
+			cases.slug,
+			cases.short_description,
+			cases.difficulty_level,
+			cases.estimated_duration_minutes,
+			cases.minimum_level,
+			cases.minimum_reputation,
+			cases.thumbnail_url,
+			cases.published_at,
+			cases.created_at
+		`).
+		Order("session_activity DESC").
 		Limit(param.Limit).
 		Offset(param.Offset).
 		Scan(&cases).Error

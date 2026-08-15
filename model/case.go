@@ -297,6 +297,13 @@ type ListUserCasesParam struct {
 	Offset int
 }
 
+type ListUserCasesBySessionStatusParam struct {
+	UserID uuid.UUID
+	Status string
+	Limit  int
+	Offset int
+}
+
 type UserCaseListRow struct {
 	CaseID                   uuid.UUID  `json:"case_id"`
 	Title                    string     `json:"title"`

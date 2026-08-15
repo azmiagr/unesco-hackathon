@@ -671,10 +671,6 @@ func (s *CaseService) ListCasesForUser(userID uuid.UUID, req model.ListUserCases
 		return nil, appErrors.BadRequest("invalid case tab")
 	}
 
-	if tab == model.UserCaseTabInProgress || tab == model.UserCaseTabCompleted {
-		return emptyUserCaseListResponse(page, limit), nil
-	}
-
 	profile, err := s.userProfileRepo.GetUserProfile(s.db, model.GetUserProfileParam{UserID: userID})
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -683,17 +679,39 @@ func (s *CaseService) ListCasesForUser(userID uuid.UUID, req model.ListUserCases
 		return nil, appErrors.InternalServer("failed to get user profile")
 	}
 
-	cases, total, err := s.caseRepo.ListPublishedCasesForUser(s.db, model.ListUserCasesParam{
-		Limit:  limit,
-		Offset: (page - 1) * limit,
-	})
+	var cases []model.UserCaseListRow
+	var total int64
+	if tab == model.UserCaseTabAll {
+		cases, total, err = s.caseRepo.ListPublishedCasesForUser(s.db, model.ListUserCasesParam{
+			Limit:  limit,
+			Offset: (page - 1) * limit,
+		})
+	} else {
+		sessionStatus := model.CaseSessionStatusActive
+		if tab == model.UserCaseTabCompleted {
+			sessionStatus = model.CaseSessionStatusCompleted
+		}
+		cases, total, err = s.caseRepo.ListUserCasesBySessionStatus(s.db, model.ListUserCasesBySessionStatusParam{
+			UserID: userID,
+			Status: sessionStatus,
+			Limit:  limit,
+			Offset: (page - 1) * limit,
+		})
+	}
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to list cases")
 	}
 
 	responses := make([]model.UserCaseCardResponse, 0, len(cases))
 	for _, caseRow := range cases {
-		responses = append(responses, mapUserCaseCardResponse(caseRow, profile))
+		response := mapUserCaseCardResponse(caseRow, profile)
+		if tab == model.UserCaseTabInProgress {
+			response.ProgressStatus = model.UserCaseProgressInProgress
+		}
+		if tab == model.UserCaseTabCompleted {
+			response.ProgressStatus = model.UserCaseProgressCompleted
+		}
+		responses = append(responses, response)
 	}
 
 	totalPages := 0
@@ -710,18 +728,6 @@ func (s *CaseService) ListCasesForUser(userID uuid.UUID, req model.ListUserCases
 			TotalPages: totalPages,
 		},
 	}, nil
-}
-
-func emptyUserCaseListResponse(page int, limit int) *model.ListUserCasesResponse {
-	return &model.ListUserCasesResponse{
-		Cases: []model.UserCaseCardResponse{},
-		Pagination: model.PaginationResponse{
-			Page:       page,
-			Limit:      limit,
-			Total:      0,
-			TotalPages: 0,
-		},
-	}
 }
 
 func mapUserCaseCardResponse(caseRow model.UserCaseListRow, profile *entity.UserProfile) model.UserCaseCardResponse {
