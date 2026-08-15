@@ -160,10 +160,15 @@ func (r *RedeemItemRepository) ListRedeemItemsForUser(tx *gorm.DB, param model.L
 		Select("redeem_item_id, COUNT(*) AS stock_remaining").
 		Where("deleted_at IS NULL AND claimed_at IS NULL AND expires_at >= UTC_TIMESTAMP()").
 		Group("redeem_item_id")
+	ownedItems := tx.Table("user_items").
+		Select("redeem_item_id, COUNT(*) AS owned_count").
+		Where("user_id = ? AND purchase_type = ? AND redeem_item_id IS NOT NULL", param.UserID, model.UserItemPurchaseTypeRedeem).
+		Group("redeem_item_id")
 
 	err = applyUserRedeemItemFilters(tx.Table("redeem_items"), param).
 		Joins("JOIN redeem_types ON redeem_types.redeem_type_id = redeem_items.redeem_type_id").
 		Joins("LEFT JOIN (?) AS available_codes ON available_codes.redeem_item_id = redeem_items.redeem_item_id", availableCodes).
+		Joins("LEFT JOIN (?) AS owned_items ON owned_items.redeem_item_id = redeem_items.redeem_item_id", ownedItems).
 		Select(`
 			redeem_items.redeem_item_id,
 			redeem_items.redeem_type_id,
@@ -196,6 +201,7 @@ func (r *RedeemItemRepository) ListRedeemItemsForUser(tx *gorm.DB, param model.L
 					ELSE DATE_ADD(DATE_SUB(UTC_DATE(), INTERVAL WEEKDAY(UTC_DATE()) DAY), INTERVAL 7 DAY)
 				END
 			), 0) AS user_claim_count,
+			COALESCE(owned_items.owned_count, 0) AS owned_count,
 			redeem_items.created_at
 		`, param.UserID, model.UserItemPurchaseTypeRedeem).
 		Order("redeem_items.created_at ASC").
@@ -230,7 +236,20 @@ func (r *RedeemItemRepository) DeleteRedeemItem(tx *gorm.DB, redeemItemID uuid.U
 }
 
 func applyUserRedeemItemFilters(query *gorm.DB, param model.ListRedeemItemsForUserParam) *gorm.DB {
-	query = query.Where("redeem_items.status = ? AND redeem_items.deleted_at IS NULL", model.RedeemItemStatusActive)
+	query = query.Where("redeem_items.deleted_at IS NULL")
+	if param.Filter == model.UserRedeemItemFilterOwned {
+		query = query.Where(`
+			EXISTS (
+				SELECT 1
+				FROM user_items
+				WHERE user_items.user_id = ?
+				AND user_items.redeem_item_id = redeem_items.redeem_item_id
+				AND user_items.purchase_type = ?
+			)
+		`, param.UserID, model.UserItemPurchaseTypeRedeem)
+	} else {
+		query = query.Where("redeem_items.status = ?", model.RedeemItemStatusActive)
+	}
 
 	if param.RedeemItemID != uuid.Nil {
 		query = query.Where("redeem_items.redeem_item_id = ?", param.RedeemItemID)

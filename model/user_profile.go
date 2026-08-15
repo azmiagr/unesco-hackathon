@@ -19,7 +19,9 @@ type UserProfileDetailRow struct {
 	UserProfileID              uuid.UUID  `json:"user_profile_id"`
 	AvatarID                   *uuid.UUID `json:"avatar_id"`
 	AvatarURL                  string     `json:"avatar_url"`
+	TitleID                    *uuid.UUID `json:"title_id"`
 	Title                      string     `json:"title"`
+	TitleImageBorder           string     `json:"title_image_border"`
 	CurrentLevel               int        `json:"current_level"`
 	CurrentXP                  int        `json:"current_xp"`
 	CoinBalance                int        `json:"coin_balance"`
@@ -37,7 +39,9 @@ type UserProfileSummaryResponse struct {
 	Email             string     `json:"email"`
 	AvatarID          *uuid.UUID `json:"avatar_id"`
 	AvatarURL         string     `json:"avatar_url"`
+	TitleID           *uuid.UUID `json:"title_id"`
 	Title             string     `json:"title"`
+	TitleImageBorder  string     `json:"title_image_border"`
 	CurrentLevel      int        `json:"current_level"`
 	CurrentXP         int        `json:"current_xp"`
 	CoinBalance       int        `json:"coin_balance"`

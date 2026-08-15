@@ -138,6 +138,7 @@ func (r *UserProfileRepository) GetUserProfileDetail(tx *gorm.DB, userID uuid.UU
 	err := tx.Table("users").
 		Joins("JOIN user_profiles ON user_profiles.user_id = users.user_id").
 		Joins("LEFT JOIN avatars ON avatars.avatar_id = user_profiles.avatar_id").
+		Joins("LEFT JOIN titles ON titles.title_id = user_profiles.title_id").
 		Where("users.user_id = ?", userID).
 		Select(`
 			users.user_id,
@@ -147,7 +148,9 @@ func (r *UserProfileRepository) GetUserProfileDetail(tx *gorm.DB, userID uuid.UU
 			user_profiles.user_profile_id,
 			user_profiles.avatar_id,
 			COALESCE(avatars.image_url, '') AS avatar_url,
-			COALESCE(user_profiles.title, '') AS title,
+			user_profiles.title_id,
+			COALESCE(titles.title, user_profiles.title, '') AS title,
+			COALESCE(titles.image_border, '') AS title_image_border,
 			COALESCE(user_profiles.current_level, 0) AS current_level,
 			COALESCE(user_profiles.current_xp, 0) AS current_xp,
 			COALESCE(user_profiles.coin_balance, 0) AS coin_balance,

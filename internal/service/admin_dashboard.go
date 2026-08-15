@@ -165,9 +165,10 @@ func buildDashboardTrend(current int64, previous int64) model.AdminDashboardTren
 	percent = roundFloat(percent, 2)
 
 	label := "stabil"
-	if direction == "up" {
+	switch direction {
+	case "up":
 		label = "+ " + trimFloat(percent) + "%"
-	} else if direction == "down" {
+	case "down":
 		label = "- " + trimFloat(percent) + "%"
 	}
 

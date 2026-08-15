@@ -16,6 +16,7 @@ const (
 
 	UserItemPurchaseTypeShop   = "shop"
 	UserItemPurchaseTypeRedeem = "redeem"
+	UserItemPurchaseTypeGrant  = "grant"
 
 	UserShopItemOwnershipNotOwned = "not_owned"
 	UserShopItemOwnershipOwned    = "owned"
@@ -36,8 +37,9 @@ type GetItemParam struct {
 }
 
 type GetUserItemParam struct {
-	UserID uuid.UUID
-	ItemID uuid.UUID
+	UserID  uuid.UUID
+	ItemID  uuid.UUID
+	TitleID uuid.UUID
 }
 
 type ListItemsParam struct {

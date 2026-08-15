@@ -45,7 +45,10 @@ func (r *Rest) MountEndpoint() {
 	user.POST("/cases/:caseID/sessions", r.StartCaseSessionForUser)
 	user.GET("/leaderboard", r.ListLeaderboard)
 	user.GET("/profile", r.GetUserProfile)
+	user.GET("/inventory", r.GetInventoryForUser)
 	user.GET("/item-categories", r.ListItemCategoriesForUser)
+	user.GET("/titles", r.ListTitlesForUser)
+	user.PATCH("/titles/:titleID/equip", r.EquipTitleForUser)
 
 	sessions := user.Group("/sessions")
 	sessions.GET("/:sessionID/gameplay", r.GetGameplayStateForUser)
@@ -87,6 +90,13 @@ func (r *Rest) MountEndpoint() {
 	gameLevels.POST("", r.CreateGameLevelByAdmin)
 	gameLevels.PATCH("/:gameLevelID", r.UpdateGameLevelByAdmin)
 	gameLevels.DELETE("/:gameLevelID", r.DeleteGameLevelByAdmin)
+
+	titles := admin.Group("/titles")
+	titles.GET("", r.ListTitlesByAdmin)
+	titles.GET("/:titleID", r.GetTitleByAdmin)
+	titles.POST("", r.CreateTitleByAdmin)
+	titles.PATCH("/:titleID", r.UpdateTitleByAdmin)
+	titles.DELETE("/:titleID", r.DeleteTitleByAdmin)
 
 	items := admin.Group("/items")
 	items.GET("", r.ListItemsByAdmin)

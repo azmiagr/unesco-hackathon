@@ -41,6 +41,8 @@ type GameplayService struct {
 	gameConfigRepo   repository.IGameConfigRepository
 	caseScoringRepo  repository.ICaseScoringOutcomeRepository
 	gameLevelRepo    repository.IGameLevelRepository
+	titleRepo        repository.ITitleRepository
+	userItemRepo     repository.IUserItemRepository
 	cityStatsRepo    repository.ICityStatisticsRepository
 }
 
@@ -54,6 +56,8 @@ func NewGameplayService(
 	gameConfigRepo repository.IGameConfigRepository,
 	caseScoringRepo repository.ICaseScoringOutcomeRepository,
 	gameLevelRepo repository.IGameLevelRepository,
+	titleRepo repository.ITitleRepository,
+	userItemRepo repository.IUserItemRepository,
 	cityStatsRepo repository.ICityStatisticsRepository,
 ) IGameplayService {
 	return &GameplayService{
@@ -67,6 +71,8 @@ func NewGameplayService(
 		gameConfigRepo:   gameConfigRepo,
 		caseScoringRepo:  caseScoringRepo,
 		gameLevelRepo:    gameLevelRepo,
+		titleRepo:        titleRepo,
+		userItemRepo:     userItemRepo,
 		cityStatsRepo:    cityStatsRepo,
 	}
 }
@@ -620,7 +626,7 @@ func (s *GameplayService) SubmitCaseSessionForUser(
 	xpGained := calculateXPGained(snapshot.Case.EstimatedDurationMinutes, totalScore, config)
 	coinGained := calculateCoinGained(xpGained, totalScore)
 	xpAfter := xpBefore + xpGained
-	levelAfter, levelRewardCoin, titleAfter, err := s.resolveLevelAfter(tx, levelBefore, xpAfter)
+	levelAfter, levelRewardCoin, err := s.resolveLevelAfter(tx, levelBefore, xpAfter)
 	if err != nil {
 		return nil, err
 	}
@@ -636,8 +642,8 @@ func (s *GameplayService) SubmitCaseSessionForUser(
 	profile.ConfidenceCalibrationScore = mergeProfileScore(profile.ConfidenceCalibrationScore, scoreByCategory(scoreBreakdown, model.ScoringCategoryConfidenceCalibration))
 	profile.ReasoningScore = mergeProfileScore(profile.ReasoningScore, scoreByCategory(scoreBreakdown, model.ScoringCategoryReasoning))
 	profile.SafetyJudgmentScore = mergeProfileScore(profile.SafetyJudgmentScore, scoreByCategory(scoreBreakdown, model.ScoringCategorySafetyJudgment))
-	if titleAfter != "" {
-		profile.Title = titleAfter
+	if err := grantUnlockedTitles(tx, s.titleRepo, s.userItemRepo, userID, levelAfter, now); err != nil {
+		return nil, err
 	}
 	err = s.userProfileRepo.UpdateUserProfile(tx, profile)
 	if err != nil {
@@ -1479,23 +1485,21 @@ func (s *GameplayService) applyCityImpact(tx *gorm.DB, settings []entity.CaseOut
 	return impact, nil
 }
 
-func (s *GameplayService) resolveLevelAfter(tx *gorm.DB, currentLevel int, xpAfter int) (int, int, string, error) {
+func (s *GameplayService) resolveLevelAfter(tx *gorm.DB, currentLevel int, xpAfter int) (int, int, error) {
 	levels, _, err := s.gameLevelRepo.ListGameLevels(tx, model.ListGameLevelsParam{Limit: 1000})
 	if err != nil {
-		return currentLevel, 0, "", appErrors.InternalServer("failed to list game levels")
+		return currentLevel, 0, appErrors.InternalServer("failed to list game levels")
 	}
 
 	levelAfter := currentLevel
 	rewardCoin := 0
-	title := ""
 	for _, level := range levels {
 		if xpAfter >= level.XPRequired && level.Level > levelAfter {
 			levelAfter = level.Level
 			rewardCoin += level.RewardCoin
-			title = level.Title
 		}
 	}
-	return levelAfter, rewardCoin, title, nil
+	return levelAfter, rewardCoin, nil
 }
 
 func calculateXPGained(durationMinutes int, totalScore int, config *entity.GameConfig) int {

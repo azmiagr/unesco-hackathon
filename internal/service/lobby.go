@@ -311,9 +311,6 @@ func mapUserLobbyLevelProgress(
 	title := profile.Title
 	if currentLevel != nil {
 		currentLevelXP = currentLevel.XPRequired
-		if title == "" {
-			title = currentLevel.Title
-		}
 	}
 
 	nextLevelNumber := currentLevelNumber

@@ -15,6 +15,9 @@ const (
 	RedeemClaimPeriodDaily   = "daily"
 	RedeemClaimPeriodWeekly  = "weekly"
 	RedeemClaimPeriodMonthly = "monthly"
+
+	UserRedeemItemFilterAll   = "all"
+	UserRedeemItemFilterOwned = "owned"
 )
 
 type GetRedeemTypeParam struct {
@@ -45,6 +48,7 @@ type ListRedeemItemsForUserParam struct {
 	UserID       uuid.UUID
 	RedeemItemID uuid.UUID
 	Search       string
+	Filter       string
 	Limit        int
 	Offset       int
 }
@@ -93,6 +97,7 @@ type AdminUpdateRedeemItemRequest struct {
 
 type UserListRedeemItemsRequest struct {
 	Search string `form:"search"`
+	Filter string `form:"filter"`
 	Page   int    `form:"page"`
 	Limit  int    `form:"limit"`
 }
@@ -139,6 +144,7 @@ type UserRedeemItemRow struct {
 	IsStockVisible    bool      `json:"is_stock_visible"`
 	StockRemaining    int       `json:"stock_remaining"`
 	UserClaimCount    int       `json:"user_claim_count"`
+	OwnedCount        int       `json:"owned_count"`
 	CreatedAt         time.Time `json:"created_at"`
 }
 
@@ -158,6 +164,8 @@ type UserRedeemItemResponse struct {
 	IsStockVisible    bool      `json:"is_stock_visible"`
 	StockRemaining    int       `json:"stock_remaining"`
 	UserClaimCount    int       `json:"user_claim_count"`
+	OwnedCount        int       `json:"owned_count"`
+	IsOwned           bool      `json:"is_owned"`
 	CanPurchase       bool      `json:"can_purchase"`
 }
 

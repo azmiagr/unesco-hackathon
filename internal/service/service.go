@@ -13,6 +13,7 @@ type Service struct {
 	RoleService           IRoleService
 	CaseService           ICaseService
 	AvatarService         IAvatarService
+	TitleService          ITitleService
 	ItemService           IItemService
 	RedeemService         IRedeemService
 	GameConfigService     IGameConfigService
@@ -30,6 +31,7 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 	roleService := NewRoleService(repository.RoleRepository)
 	caseService := NewCaseService(repository.CaseRepository, repository.CaseVersionRepository, repository.CaseEvidenceRepository, repository.CaseQuestionRepository, repository.CaseChatbotConfigRepository, repository.CaseScoringOutcomeRepository, repository.UserRepository, repository.AuditLogRepository, supabase, repository.UserProfileRepository)
 	avatarService := NewAvatarService(repository.AvatarRepository)
+	titleService := NewTitleService(repository.TitleRepository, repository.UserItemRepository, repository.UserProfileRepository, supabase)
 	itemService := NewItemService(repository.ItemRepository, repository.ItemCategoryRepository, repository.UserItemRepository, repository.UserProfileRepository, repository.AvatarRepository, repository.UserRepository, repository.AuditLogRepository, supabase)
 	redeemService := NewRedeemService(repository.RedeemItemRepository, repository.RedeemTypeRepository, repository.RedeemCodeRepository, repository.UserProfileRepository, repository.UserItemRepository, repository.UserRepository, repository.AuditLogRepository, supabase)
 	gameConfigService := NewGameConfigService(repository.GameConfigRepository, repository.GameLevelRepository, repository.UserRepository, repository.AuditLogRepository)
@@ -38,7 +40,7 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 	leaderboardService := NewLeaderboardService(repository.UserProfileRepository)
 	profileService := NewProfileService(repository.UserProfileRepository, repository.GameLevelRepository, repository.CaseSessionRepository)
 	lobbyService := NewLobbyService(repository.UserProfileRepository, repository.GameLevelRepository, repository.CaseRepository, repository.CityStatisticsRepository, repository.CaseSessionRepository)
-	gameplayService := NewGameplayService(repository.CaseRepository, repository.CaseVersionRepository, repository.CaseEvidenceRepository, repository.CaseQuestionRepository, repository.CaseSessionRepository, repository.UserProfileRepository, repository.GameConfigRepository, repository.CaseScoringOutcomeRepository, repository.GameLevelRepository, repository.CityStatisticsRepository)
+	gameplayService := NewGameplayService(repository.CaseRepository, repository.CaseVersionRepository, repository.CaseEvidenceRepository, repository.CaseQuestionRepository, repository.CaseSessionRepository, repository.UserProfileRepository, repository.GameConfigRepository, repository.CaseScoringOutcomeRepository, repository.GameLevelRepository, repository.TitleRepository, repository.UserItemRepository, repository.CityStatisticsRepository)
 
 	return &Service{
 		UserService:           userService,
@@ -46,6 +48,7 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 		RoleService:           roleService,
 		CaseService:           caseService,
 		AvatarService:         avatarService,
+		TitleService:          titleService,
 		ItemService:           itemService,
 		RedeemService:         redeemService,
 		GameConfigService:     gameConfigService,

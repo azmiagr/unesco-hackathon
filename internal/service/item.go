@@ -38,6 +38,7 @@ type IItemService interface {
 	ListItemCategoriesForUser(req model.UserListItemCategoriesRequest) (*model.UserListItemCategoriesResponse, error)
 	ListItemsByAdmin(req model.AdminListItemsRequest) (*model.AdminListItemsResponse, error)
 	ListShopItemsForUser(userID uuid.UUID, req model.UserListShopItemsRequest) (*model.UserListShopItemsResponse, error)
+	GetInventoryForUser(userID uuid.UUID) (*model.UserInventoryResponse, error)
 	GetShopItemDetailForUser(userID uuid.UUID, itemID uuid.UUID) (*model.UserGetShopItemDetailResponse, error)
 	GetItemDetailByAdmin(itemID uuid.UUID) (*model.AdminGetItemDetailResponse, error)
 	CreateItemByAdmin(adminUserID uuid.UUID, req model.AdminCreateItemRequest) (*model.AdminCreateItemResponse, error)
@@ -233,6 +234,60 @@ func (s *ItemService) ListShopItemsForUser(userID uuid.UUID, req model.UserListS
 			Limit:      limit,
 			Total:      total,
 			TotalPages: totalPages,
+		},
+	}, nil
+}
+
+func (s *ItemService) GetInventoryForUser(userID uuid.UUID) (*model.UserInventoryResponse, error) {
+	if userID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	rows, err := s.userItemRepo.ListUserInventoryItems(s.db, userID)
+	if err != nil {
+		return nil, appErrors.InternalServer("failed to list user inventory")
+	}
+
+	groups := map[string][]model.UserInventoryItemResponse{
+		model.UserItemPurchaseTypeShop:   {},
+		model.UserItemPurchaseTypeRedeem: {},
+		model.UserItemPurchaseTypeGrant:  {},
+	}
+	for _, row := range rows {
+		item := mapUserInventoryItemResponse(row)
+		groups[row.PurchaseType] = append(groups[row.PurchaseType], item)
+	}
+
+	shopItems := groups[model.UserItemPurchaseTypeShop]
+	redeemItems := groups[model.UserItemPurchaseTypeRedeem]
+	grantItems := groups[model.UserItemPurchaseTypeGrant]
+
+	return &model.UserInventoryResponse{
+		Groups: []model.UserInventoryGroupResponse{
+			{
+				Type:  model.UserItemPurchaseTypeShop,
+				Label: "Shop Items",
+				Count: len(shopItems),
+				Items: shopItems,
+			},
+			{
+				Type:  model.UserItemPurchaseTypeRedeem,
+				Label: "Redeem Items",
+				Count: len(redeemItems),
+				Items: redeemItems,
+			},
+			{
+				Type:  model.UserItemPurchaseTypeGrant,
+				Label: "Granted Titles",
+				Count: len(grantItems),
+				Items: grantItems,
+			},
+		},
+		Summary: model.UserInventorySummaryResponse{
+			TotalItems:  len(rows),
+			ShopCount:   len(shopItems),
+			RedeemCount: len(redeemItems),
+			GrantCount:  len(grantItems),
 		},
 	}, nil
 }
@@ -1010,6 +1065,74 @@ func mapUserShopItemResponse(row model.UserShopItemRow) model.UserShopItemRespon
 		CanPurchase:     !isOwned,
 		CanEquip:        row.CategoryCode == model.ItemCategoryAvatar && isOwned && !isEquipped && row.AvatarID != nil,
 	}
+}
+
+func mapUserInventoryItemResponse(row model.UserInventoryItemRow) model.UserInventoryItemResponse {
+	item := model.UserInventoryItemResponse{
+		UserItemID:   row.UserItemID,
+		PurchaseType: row.PurchaseType,
+		CoinSpent:    row.CoinSpent,
+		PurchasedAt:  row.PurchasedAt,
+		EquippedAt:   row.EquippedAt,
+	}
+
+	switch row.PurchaseType {
+	case model.UserItemPurchaseTypeShop:
+		if row.ItemID != nil && row.ItemCategoryID != nil {
+			item.Shop = &model.UserInventoryShopResponse{
+				ItemID:         *row.ItemID,
+				ItemCategoryID: *row.ItemCategoryID,
+				CategoryCode:   row.CategoryCode,
+				CategoryName:   row.CategoryName,
+				AvatarID:       row.AvatarID,
+				Name:           row.ItemName,
+				Description:    row.ItemDescription,
+				ImageURL:       row.ItemImageURL,
+				Status:         row.ItemStatus,
+				IsEquipped:     row.EquippedAt != nil,
+			}
+		}
+	case model.UserItemPurchaseTypeRedeem:
+		if row.RedeemItemID != nil && row.RedeemTypeID != nil {
+			item.Redeem = &model.UserInventoryRedeemResponse{
+				RedeemItemID:  *row.RedeemItemID,
+				RedeemCodeID:  row.RedeemCodeID,
+				RedeemTypeID:  *row.RedeemTypeID,
+				TypeCode:      row.RedeemTypeCode,
+				TypeName:      row.RedeemTypeName,
+				Name:          row.RedeemName,
+				PartnerName:   row.PartnerName,
+				Description:   row.RedeemDescription,
+				ImageURL:      row.RedeemImageURL,
+				Code:          row.RedeemCode,
+				CodeStatus:    redeemInventoryCodeStatus(row.RedeemCodeExpiresAt),
+				CodeExpiresAt: row.RedeemCodeExpiresAt,
+				CodeClaimedAt: row.RedeemCodeClaimedAt,
+			}
+		}
+	case model.UserItemPurchaseTypeGrant:
+		if row.TitleID != nil {
+			item.Title = &model.UserInventoryTitleResponse{
+				TitleID:     *row.TitleID,
+				Title:       row.TitleName,
+				UnlockLevel: row.TitleUnlockLevel,
+				ImageBorder: row.TitleImageBorder,
+				IsEquipped:  row.EquippedAt != nil,
+			}
+		}
+	}
+
+	return item
+}
+
+func redeemInventoryCodeStatus(expiresAt *time.Time) string {
+	if expiresAt == nil {
+		return ""
+	}
+	if expiresAt.Before(time.Now().UTC()) {
+		return "expired"
+	}
+	return "active"
 }
 
 func mapAdminItemCategoryResponse(category entity.ItemCategory) model.AdminItemCategoryResponse {

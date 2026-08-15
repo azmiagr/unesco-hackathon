@@ -50,6 +50,11 @@ var allowedRedeemCodeStatuses = map[string]bool{
 	model.RedeemCodeStatusExpired:   true,
 }
 
+var allowedUserRedeemItemFilters = map[string]bool{
+	model.UserRedeemItemFilterAll:   true,
+	model.UserRedeemItemFilterOwned: true,
+}
+
 type IRedeemService interface {
 	ListRedeemItemsForUser(userID uuid.UUID, req model.UserListRedeemItemsRequest) (*model.UserListRedeemItemsResponse, error)
 	PurchaseRedeemItemForUser(userID uuid.UUID, redeemItemID uuid.UUID) (*model.UserPurchaseRedeemItemResponse, error)
@@ -117,10 +122,18 @@ func (s *RedeemService) ListRedeemItemsForUser(userID uuid.UUID, req model.UserL
 	if limit > maxUserRedeemItemLimit {
 		limit = maxUserRedeemItemLimit
 	}
+	filter := strings.ToLower(strings.TrimSpace(req.Filter))
+	if filter == "" {
+		filter = model.UserRedeemItemFilterAll
+	}
+	if !allowedUserRedeemItemFilters[filter] {
+		return nil, appErrors.BadRequest("invalid redeem item filter")
+	}
 
 	rows, total, err := s.redeemItemRepo.ListRedeemItemsForUser(s.db, model.ListRedeemItemsForUserParam{
 		UserID: userID,
 		Search: strings.TrimSpace(req.Search),
+		Filter: filter,
 		Limit:  limit,
 		Offset: (page - 1) * limit,
 	})
@@ -1162,6 +1175,8 @@ func mapUserRedeemItemResponse(row model.UserRedeemItemRow) model.UserRedeemItem
 		IsStockVisible:    row.IsStockVisible,
 		StockRemaining:    row.StockRemaining,
 		UserClaimCount:    row.UserClaimCount,
+		OwnedCount:        row.OwnedCount,
+		IsOwned:           row.OwnedCount > 0,
 		CanPurchase:       row.StockRemaining > 0 && row.UserClaimCount < row.MaxClaimPerPeriod,
 	}
 }
