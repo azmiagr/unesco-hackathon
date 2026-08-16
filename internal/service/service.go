@@ -40,7 +40,7 @@ func NewService(repository *repository.Repository, bcrypt bcrypt.Interface, jwtA
 	leaderboardService := NewLeaderboardService(repository.UserProfileRepository)
 	profileService := NewProfileService(repository.UserProfileRepository, repository.GameLevelRepository, repository.CaseSessionRepository)
 	lobbyService := NewLobbyService(repository.UserProfileRepository, repository.GameLevelRepository, repository.CaseRepository, repository.CityStatisticsRepository, repository.CaseSessionRepository)
-	gameplayService := NewGameplayService(repository.CaseRepository, repository.CaseVersionRepository, repository.CaseEvidenceRepository, repository.CaseQuestionRepository, repository.CaseSessionRepository, repository.UserProfileRepository, repository.GameConfigRepository, repository.CaseScoringOutcomeRepository, repository.GameLevelRepository, repository.TitleRepository, repository.UserItemRepository, repository.CityStatisticsRepository)
+	gameplayService := NewGameplayService(repository.CaseRepository, repository.CaseVersionRepository, repository.CaseEvidenceRepository, repository.CaseQuestionRepository, repository.CaseSessionRepository, repository.CaseChatbotConfigRepository, repository.UserProfileRepository, repository.GameConfigRepository, repository.CaseScoringOutcomeRepository, repository.GameLevelRepository, repository.TitleRepository, repository.UserItemRepository, repository.CityStatisticsRepository)
 
 	return &Service{
 		UserService:           userService,

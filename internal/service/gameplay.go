@@ -31,19 +31,20 @@ type IGameplayService interface {
 }
 
 type GameplayService struct {
-	db               *gorm.DB
-	caseRepo         repository.ICaseRepository
-	caseVersionRepo  repository.ICaseVersionRepository
-	caseEvidenceRepo repository.ICaseEvidenceRepository
-	caseQuestionRepo repository.ICaseQuestionRepository
-	caseSessionRepo  repository.ICaseSessionRepository
-	userProfileRepo  repository.IUserProfileRepository
-	gameConfigRepo   repository.IGameConfigRepository
-	caseScoringRepo  repository.ICaseScoringOutcomeRepository
-	gameLevelRepo    repository.IGameLevelRepository
-	titleRepo        repository.ITitleRepository
-	userItemRepo     repository.IUserItemRepository
-	cityStatsRepo    repository.ICityStatisticsRepository
+	db                *gorm.DB
+	caseRepo          repository.ICaseRepository
+	caseVersionRepo   repository.ICaseVersionRepository
+	caseEvidenceRepo  repository.ICaseEvidenceRepository
+	caseQuestionRepo  repository.ICaseQuestionRepository
+	caseSessionRepo   repository.ICaseSessionRepository
+	chatbotConfigRepo repository.ICaseChatbotConfigRepository
+	userProfileRepo   repository.IUserProfileRepository
+	gameConfigRepo    repository.IGameConfigRepository
+	caseScoringRepo   repository.ICaseScoringOutcomeRepository
+	gameLevelRepo     repository.IGameLevelRepository
+	titleRepo         repository.ITitleRepository
+	userItemRepo      repository.IUserItemRepository
+	cityStatsRepo     repository.ICityStatisticsRepository
 }
 
 func NewGameplayService(
@@ -52,6 +53,7 @@ func NewGameplayService(
 	caseEvidenceRepo repository.ICaseEvidenceRepository,
 	caseQuestionRepo repository.ICaseQuestionRepository,
 	caseSessionRepo repository.ICaseSessionRepository,
+	chatbotConfigRepo repository.ICaseChatbotConfigRepository,
 	userProfileRepo repository.IUserProfileRepository,
 	gameConfigRepo repository.IGameConfigRepository,
 	caseScoringRepo repository.ICaseScoringOutcomeRepository,
@@ -61,19 +63,20 @@ func NewGameplayService(
 	cityStatsRepo repository.ICityStatisticsRepository,
 ) IGameplayService {
 	return &GameplayService{
-		db:               mariadb.Connection,
-		caseRepo:         caseRepo,
-		caseVersionRepo:  caseVersionRepo,
-		caseEvidenceRepo: caseEvidenceRepo,
-		caseQuestionRepo: caseQuestionRepo,
-		caseSessionRepo:  caseSessionRepo,
-		userProfileRepo:  userProfileRepo,
-		gameConfigRepo:   gameConfigRepo,
-		caseScoringRepo:  caseScoringRepo,
-		gameLevelRepo:    gameLevelRepo,
-		titleRepo:        titleRepo,
-		userItemRepo:     userItemRepo,
-		cityStatsRepo:    cityStatsRepo,
+		db:                mariadb.Connection,
+		caseRepo:          caseRepo,
+		caseVersionRepo:   caseVersionRepo,
+		caseEvidenceRepo:  caseEvidenceRepo,
+		caseQuestionRepo:  caseQuestionRepo,
+		caseSessionRepo:   caseSessionRepo,
+		chatbotConfigRepo: chatbotConfigRepo,
+		userProfileRepo:   userProfileRepo,
+		gameConfigRepo:    gameConfigRepo,
+		caseScoringRepo:   caseScoringRepo,
+		gameLevelRepo:     gameLevelRepo,
+		titleRepo:         titleRepo,
+		userItemRepo:      userItemRepo,
+		cityStatsRepo:     cityStatsRepo,
 	}
 }
 
@@ -283,7 +286,19 @@ func (s *GameplayService) GetGameplayStateForUser(userID uuid.UUID, caseSessionI
 		return nil, appErrors.InternalServer("failed to get session")
 	}
 
-	return s.buildGameplayState(s.db, session)
+	state, err := s.buildGameplayState(s.db, session)
+	if err != nil {
+		return nil, err
+	}
+	if state.ChatbotConfig == nil {
+		chatbotConfig, err := s.getGameplayChatbotConfig(s.db, session.CaseID)
+		if err != nil {
+			return nil, err
+		}
+		state.ChatbotConfig = chatbotConfig
+	}
+
+	return state, nil
 }
 
 func (s *GameplayService) OpenEvidenceForUser(
@@ -778,6 +793,10 @@ func (s *GameplayService) getLatestPublishedCaseVersion(tx *gorm.DB, caseID uuid
 }
 
 func (s *GameplayService) buildSessionSnapshot(tx *gorm.DB, caseEntity *entity.Case, caseVersion *entity.CaseVersion) (*model.GameplaySessionSnapshot, error) {
+	chatbotConfig, err := s.getGameplayChatbotConfig(tx, caseEntity.CaseID)
+	if err != nil {
+		return nil, err
+	}
 	evidences, err := s.caseEvidenceRepo.ListCaseEvidences(tx, model.ListCaseEvidencesParam{CaseVersionID: caseVersion.CaseVersionID})
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to list case evidences")
@@ -809,8 +828,9 @@ func (s *GameplayService) buildSessionSnapshot(tx *gorm.DB, caseEntity *entity.C
 			ThumbnailURL:             caseEntity.ThumbnailURL,
 			PublishedAt:              caseEntity.PublishedAt,
 		},
-		Evidences: make([]model.GameplayEvidenceResponse, 0, len(evidences)),
-		Questions: make([]model.GameplayQuestionResponse, 0, len(questions)),
+		ChatbotConfig: chatbotConfig,
+		Evidences:     make([]model.GameplayEvidenceResponse, 0, len(evidences)),
+		Questions:     make([]model.GameplayQuestionResponse, 0, len(questions)),
 	}
 
 	for i, evidence := range evidences {
@@ -825,6 +845,33 @@ func (s *GameplayService) buildSessionSnapshot(tx *gorm.DB, caseEntity *entity.C
 	}
 
 	return snapshot, nil
+}
+
+func (s *GameplayService) getGameplayChatbotConfig(tx *gorm.DB, caseID uuid.UUID) (*model.GameplayChatbotConfigResponse, error) {
+	config, err := s.chatbotConfigRepo.GetCaseChatbotConfig(tx, model.GetCaseChatbotConfigParam{CaseID: caseID})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.Conflict("case chatbot config not found")
+		}
+		return nil, appErrors.InternalServer("failed to get case chatbot config")
+	}
+
+	prohibitedBehaviors, err := parseChatbotConfigItems(config.ProhibitedBehaviors, "prohibited behaviors")
+	if err != nil {
+		return nil, err
+	}
+	suggestedQuestions, err := parseChatbotConfigItems(config.SuggestedQuestions, "suggested questions")
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.GameplayChatbotConfigResponse{
+		BotName:               config.BotName,
+		BotPersonaDescription: config.BotPersonaDescription,
+		KnowledgeBoundary:     config.KnowledgeBoundary,
+		ProhibitedBehaviors:   prohibitedBehaviors,
+		SuggestedQuestions:    suggestedQuestions,
+	}, nil
 }
 
 func (s *GameplayService) lockActiveUserSession(tx *gorm.DB, userID uuid.UUID, caseSessionID uuid.UUID) (*entity.CaseSession, error) {
@@ -935,6 +982,7 @@ func (s *GameplayService) buildGameplayStateFromSnapshot(tx *gorm.DB, session *e
 	return &model.GameplayStateResponse{
 		Session:          mapGameplaySessionResponse(session),
 		Case:             snapshot.Case,
+		ChatbotConfig:    snapshot.ChatbotConfig,
 		Evidences:        evidences,
 		Questions:        snapshot.Questions,
 		Answers:          answers,

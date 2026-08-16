@@ -128,6 +128,7 @@ type StartCaseSessionResponse struct {
 type GameplayStateResponse struct {
 	Session          GameplaySessionResponse            `json:"session"`
 	Case             GameplayCaseSnapshotResponse       `json:"case"`
+	ChatbotConfig    *GameplayChatbotConfigResponse     `json:"chatbot_config,omitempty"`
 	Evidences        []GameplayEvidenceResponse         `json:"evidences"`
 	Questions        []GameplayQuestionResponse         `json:"questions"`
 	Answers          []GameplayAnswerResponse           `json:"answers"`
@@ -269,9 +270,18 @@ type GameplayMissingQuestionResponse struct {
 }
 
 type GameplaySessionSnapshot struct {
-	Case      GameplayCaseSnapshotResponse `json:"case"`
-	Evidences []GameplayEvidenceResponse   `json:"evidences"`
-	Questions []GameplayQuestionResponse   `json:"questions"`
+	Case          GameplayCaseSnapshotResponse   `json:"case"`
+	ChatbotConfig *GameplayChatbotConfigResponse `json:"chatbot_config,omitempty"`
+	Evidences     []GameplayEvidenceResponse     `json:"evidences"`
+	Questions     []GameplayQuestionResponse     `json:"questions"`
+}
+
+type GameplayChatbotConfigResponse struct {
+	BotName               string   `json:"bot_name"`
+	BotPersonaDescription string   `json:"bot_persona_description"`
+	KnowledgeBoundary     string   `json:"knowledge_boundary"`
+	ProhibitedBehaviors   []string `json:"prohibited_behaviors"`
+	SuggestedQuestions    []string `json:"suggested_questions"`
 }
 
 type GameplayCaseSnapshotResponse struct {
