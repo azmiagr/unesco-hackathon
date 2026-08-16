@@ -12,7 +12,9 @@ if [ -f .env ]; then
   set +a
 fi
 
-IMAGE="ghcr.io/${GITHUB_REPOSITORY:-azmiagr/unesco-hackathon}:latest"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
+export IMAGE_TAG
+IMAGE="ghcr.io/${GITHUB_REPOSITORY:-azmiagr/unesco-hackathon}:${IMAGE_TAG}"
 APP_PORT="${PORT:-8081}"
 
 if docker compose version >/dev/null 2>&1; then
@@ -30,6 +32,29 @@ docker pull "$IMAGE"
 echo "Restarting services..."
 $COMPOSE down --remove-orphans
 $COMPOSE up -d
+
+echo "Waiting for application health..."
+for attempt in $(seq 1 30); do
+  app_container="$($COMPOSE ps -q app)"
+  if [ -n "$app_container" ]; then
+    status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$app_container")"
+    if [ "$status" = "healthy" ]; then
+      break
+    fi
+    if [ "$status" = "exited" ] || [ "$status" = "dead" ]; then
+      echo "Application container stopped unexpectedly."
+      $COMPOSE logs --tail=100 app
+      exit 1
+    fi
+  fi
+
+  if [ "$attempt" = "30" ]; then
+    echo "Application did not become healthy in time."
+    $COMPOSE logs --tail=100 app
+    exit 1
+  fi
+  sleep 2
+done
 
 echo "Cleaning up unused images..."
 docker image prune -f

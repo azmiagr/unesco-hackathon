@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/azmiagr/unesco-hackathon/internal/handler/rest"
 	"github.com/azmiagr/unesco-hackathon/internal/repository"
@@ -25,6 +26,9 @@ func main() {
 	err = mariadb.Migrate(db)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		return
 	}
 
 	err = mariadb.Seed(db)
