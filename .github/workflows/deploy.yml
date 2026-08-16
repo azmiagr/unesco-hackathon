@@ -59,5 +59,4 @@ jobs:
             export APP_DIR=$HOME/project/un/unesco-hackathon
 
             cd "$APP_DIR"
-            chmod +x deploy.sh
-            ./deploy.sh
+            bash deploy.sh
