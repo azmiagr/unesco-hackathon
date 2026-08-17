@@ -54,15 +54,14 @@ type ListItemsParam struct {
 }
 
 type ListVisibleShopItemsParam struct {
-	UserID                 uuid.UUID
-	ItemID                 uuid.UUID
-	ExcludeItemID          uuid.UUID
-	Search                 string
-	CategoryCode           string
-	Limit                  int
-	Offset                 int
-	Random                 bool
-	PrioritizeOwnedAvatars bool
+	UserID        uuid.UUID
+	ItemID        uuid.UUID
+	ExcludeItemID uuid.UUID
+	Search        string
+	CategoryCode  string
+	Limit         int
+	Offset        int
+	Random        bool
 }
 
 type AdminListItemsRequest struct {

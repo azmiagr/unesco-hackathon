@@ -207,12 +207,11 @@ func (s *ItemService) ListShopItemsForUser(userID uuid.UUID, req model.UserListS
 	categoryCode := strings.ToLower(strings.TrimSpace(req.CategoryCode))
 
 	rows, total, err := s.itemRepo.ListVisibleShopItems(s.db, model.ListVisibleShopItemsParam{
-		UserID:                 userID,
-		Search:                 strings.TrimSpace(req.Search),
-		CategoryCode:           categoryCode,
-		Limit:                  limit,
-		Offset:                 (page - 1) * limit,
-		PrioritizeOwnedAvatars: true,
+		UserID:       userID,
+		Search:       strings.TrimSpace(req.Search),
+		CategoryCode: categoryCode,
+		Limit:        limit,
+		Offset:       (page - 1) * limit,
 	})
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to list shop items")
