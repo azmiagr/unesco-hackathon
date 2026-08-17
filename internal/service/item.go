@@ -212,7 +212,7 @@ func (s *ItemService) ListShopItemsForUser(userID uuid.UUID, req model.UserListS
 		CategoryCode:           categoryCode,
 		Limit:                  limit,
 		Offset:                 (page - 1) * limit,
-		PrioritizeOwnedAvatars: categoryCode == model.ItemCategoryAvatar,
+		PrioritizeOwnedAvatars: true,
 	})
 	if err != nil {
 		return nil, appErrors.InternalServer("failed to list shop items")
