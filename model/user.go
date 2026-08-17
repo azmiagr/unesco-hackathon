@@ -12,6 +12,14 @@ type GetUserParam struct {
 	Username string    `json:"-"`
 }
 
+type UpdateOwnNicknameRequest struct {
+	Nickname string `json:"nickname" binding:"required,min=3,max=16"`
+}
+
+type UpdateOwnNicknameResponse struct {
+	Nickname string `json:"nickname"`
+}
+
 type GetAdminLoginOtpSessionParam struct {
 	AdminLoginOtpSessionID uuid.UUID
 	UserID                 uuid.UUID

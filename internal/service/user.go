@@ -44,6 +44,7 @@ type IUserService interface {
 	HardDeleteUser(adminUserID uuid.UUID, targetUserID uuid.UUID) (*model.AdminDeleteUserResponse, error)
 	CreateUserByAdmin(adminUserID uuid.UUID, req model.AdminCreateUserRequest) (*model.AdminCreateUserResponse, error)
 	UpdateUserByAdmin(adminUserID uuid.UUID, targetUserID uuid.UUID, req model.AdminUpdateUserRequest) (*model.AdminUpdateUserResponse, error)
+	UpdateOwnNickname(userID uuid.UUID, req model.UpdateOwnNicknameRequest) (*model.UpdateOwnNicknameResponse, error)
 }
 
 type UserService struct {
@@ -453,6 +454,52 @@ func (s *UserService) CreateUserByAdmin(adminUserID uuid.UUID, req model.AdminCr
 	return &model.AdminCreateUserResponse{
 		User: *createdUser,
 	}, nil
+}
+
+func (s *UserService) UpdateOwnNickname(userID uuid.UUID, req model.UpdateOwnNicknameRequest) (*model.UpdateOwnNicknameResponse, error) {
+	if userID == uuid.Nil {
+		return nil, appErrors.Unauthorized("unauthorized")
+	}
+
+	nickname, err := helper.RequireTrimmedString(req.Nickname, "nickname is required")
+	if err != nil {
+		return nil, err
+	}
+	if len(nickname) < 3 || len(nickname) > 16 {
+		return nil, appErrors.BadRequest("nickname must be between 3 and 16 characters")
+	}
+
+	tx := s.db.Begin()
+	defer tx.Rollback()
+
+	user, err := s.userRepo.GetUserForUpdate(tx, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appErrors.NotFound("user not found")
+		}
+		return nil, appErrors.InternalServer("failed to get user")
+	}
+
+	if user.Username != nickname {
+		exists, err := s.userRepo.UserExists(tx, model.GetUserParam{Username: nickname})
+		if err != nil {
+			return nil, appErrors.InternalServer("failed to check nickname existence")
+		}
+		if exists {
+			return nil, appErrors.Conflict("nickname already exists")
+		}
+
+		user.Username = nickname
+		if err := s.userRepo.UpdateUser(tx, user); err != nil {
+			return nil, appErrors.InternalServer("failed to update nickname")
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, appErrors.InternalServer("failed to commit transaction")
+	}
+
+	return &model.UpdateOwnNicknameResponse{Nickname: user.Username}, nil
 }
 
 func (s *UserService) UpdateUserByAdmin(adminUserID uuid.UUID, targetUserID uuid.UUID, req model.AdminUpdateUserRequest) (*model.AdminUpdateUserResponse, error) {

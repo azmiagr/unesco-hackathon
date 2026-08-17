@@ -50,6 +50,7 @@ func (r *Rest) MountEndpoint() {
 	user.POST("/cases/:caseID/sessions", r.StartCaseSessionForUser)
 	user.GET("/leaderboard", r.ListLeaderboard)
 	user.GET("/profile", r.GetUserProfile)
+	user.PATCH("/nickname", r.UpdateOwnNickname)
 	user.GET("/inventory", r.GetInventoryForUser)
 	user.GET("/item-categories", r.ListItemCategoriesForUser)
 	user.GET("/titles", r.ListTitlesForUser)
