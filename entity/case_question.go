@@ -8,14 +8,14 @@ import (
 
 type CaseQuestion struct {
 	CaseQuestionID uuid.UUID `json:"case_question_id" gorm:"type:varchar(36);primaryKey"`
-	CaseVersionID  uuid.UUID `json:"case_version_id" gorm:"type:varchar(36);not null;index"`
+	CaseVersionID  uuid.UUID `json:"case_version_id" gorm:"type:varchar(36);not null;index;index:idx_case_questions_version_sort_created,priority:1"`
 	QuestionType   string    `json:"question_type" gorm:"type:varchar(50);not null;index"`
 	QuestionText   string    `json:"question_text" gorm:"type:text;not null"`
 	Explanation    string    `json:"explanation" gorm:"type:text;not null"`
 	ScoringWeight  int       `json:"scoring_weight" gorm:"type:int;not null;default:0"`
 	IsRequired     bool      `json:"is_required" gorm:"not null;default:true"`
-	SortOrder      int       `json:"sort_order" gorm:"type:int;not null;default:0"`
-	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime"`
+	SortOrder      int       `json:"sort_order" gorm:"type:int;not null;default:0;index:idx_case_questions_version_sort_created,priority:2"`
+	CreatedAt      time.Time `json:"created_at" gorm:"autoCreateTime;index:idx_case_questions_version_sort_created,priority:3"`
 	UpdatedAt      time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 
 	MCQOptions                []CaseQuestionMCQOption                `json:"mcq_options" gorm:"foreignKey:CaseQuestionID;references:CaseQuestionID;constraint:onDelete:CASCADE"`

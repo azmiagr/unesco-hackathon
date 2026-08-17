@@ -21,5 +21,5 @@ type AuditLog struct {
 	PayloadAfter  *string    `json:"payload_after" gorm:"type:json"`
 	IPAddress     *string    `json:"ip_address" gorm:"type:varchar(45)"`
 	UserAgent     *string    `json:"user_agent" gorm:"type:varchar(255)"`
-	CreatedAt     time.Time  `json:"created_at" gorm:"autoCreateTime"`
+	CreatedAt     time.Time  `json:"created_at" gorm:"autoCreateTime;index"`
 }

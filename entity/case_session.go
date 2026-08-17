@@ -9,17 +9,17 @@ import (
 
 type CaseSession struct {
 	CaseSessionID       uuid.UUID      `json:"case_session_id" gorm:"type:varchar(36);primaryKey"`
-	UserID              uuid.UUID      `json:"user_id" gorm:"type:varchar(36);not null;index;index:idx_case_sessions_user_started"`
+	UserID              uuid.UUID      `json:"user_id" gorm:"type:varchar(36);not null;index;index:idx_case_sessions_user_started;index:idx_case_sessions_user_status_started,priority:1"`
 	CaseID              uuid.UUID      `json:"case_id" gorm:"type:varchar(36);not null;index"`
 	CaseVersionID       uuid.UUID      `json:"case_version_id" gorm:"type:varchar(36);not null;index"`
 	ActiveSessionKey    *string        `json:"active_session_key" gorm:"type:varchar(120);uniqueIndex:uq_case_sessions_active_key"`
 	StartIdempotencyKey *string        `json:"start_idempotency_key" gorm:"type:varchar(128);uniqueIndex:uq_case_sessions_start_idempotency_key"`
 	SessionSnapshot     string         `json:"session_snapshot" gorm:"type:json;not null"`
 	SessionVersion      int            `json:"session_version" gorm:"type:int;not null;default:1"`
-	Status              string         `json:"status" gorm:"type:enum('active','completed','abandoned');not null;default:'active';index"`
+	Status              string         `json:"status" gorm:"type:enum('active','completed','abandoned');not null;default:'active';index;index:idx_case_sessions_user_status_started,priority:2"`
 	InitialAssessment   *string        `json:"initial_assessment" gorm:"type:varchar(80)"`
 	InitialConfidence   *int           `json:"initial_confidence" gorm:"type:int"`
-	StartedAt           time.Time      `json:"started_at" gorm:"not null;index;index:idx_case_sessions_user_started"`
+	StartedAt           time.Time      `json:"started_at" gorm:"not null;index;index:idx_case_sessions_user_started;index:idx_case_sessions_user_status_started,priority:3"`
 	LastActivityAt      time.Time      `json:"last_activity_at" gorm:"not null;index"`
 	SubmittedAt         *time.Time     `json:"submitted_at" gorm:"index"`
 	AppVersion          *string        `json:"app_version" gorm:"type:varchar(30)"`
@@ -36,14 +36,14 @@ type CaseSession struct {
 
 type CaseSessionAnswer struct {
 	CaseSessionAnswerID uuid.UUID `json:"case_session_answer_id" gorm:"type:varchar(36);primaryKey"`
-	CaseSessionID       uuid.UUID `json:"case_session_id" gorm:"type:varchar(36);not null;index;uniqueIndex:uq_session_question_answer"`
+	CaseSessionID       uuid.UUID `json:"case_session_id" gorm:"type:varchar(36);not null;index;uniqueIndex:uq_session_question_answer;index:idx_session_answers_session_final_saved,priority:1"`
 	CaseQuestionID      uuid.UUID `json:"case_question_id" gorm:"type:varchar(36);not null;index;uniqueIndex:uq_session_question_answer"`
 	QuestionType        string    `json:"question_type" gorm:"type:varchar(50);not null;index"`
 	Value               string    `json:"value" gorm:"type:json;not null"`
 	ConfidenceInitial   *int      `json:"confidence_initial" gorm:"type:int"`
 	ConfidenceFinal     *int      `json:"confidence_final" gorm:"type:int"`
-	IsFinal             bool      `json:"is_final" gorm:"not null;default:false;index"`
-	SavedAt             time.Time `json:"saved_at" gorm:"not null;index"`
+	IsFinal             bool      `json:"is_final" gorm:"not null;default:false;index;index:idx_session_answers_session_final_saved,priority:2"`
+	SavedAt             time.Time `json:"saved_at" gorm:"not null;index;index:idx_session_answers_session_final_saved,priority:3"`
 	CreatedAt           time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt           time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
@@ -61,13 +61,13 @@ type CaseSessionEvidenceProgress struct {
 
 type CaseSessionEvent struct {
 	CaseSessionEventID uuid.UUID  `json:"case_session_event_id" gorm:"type:varchar(36);primaryKey"`
-	CaseSessionID      uuid.UUID  `json:"case_session_id" gorm:"type:varchar(36);not null;index"`
-	EventType          string     `json:"event_type" gorm:"type:varchar(80);not null;index"`
+	CaseSessionID      uuid.UUID  `json:"case_session_id" gorm:"type:varchar(36);not null;index;index:idx_session_events_session_type_created,priority:1"`
+	EventType          string     `json:"event_type" gorm:"type:varchar(80);not null;index;index:idx_session_events_session_type_created,priority:2"`
 	CaseEvidenceID     *uuid.UUID `json:"case_evidence_id" gorm:"type:varchar(36);index"`
 	CaseQuestionID     *uuid.UUID `json:"case_question_id" gorm:"type:varchar(36);index"`
 	Payload            *string    `json:"payload" gorm:"type:json"`
 	SessionVersion     int        `json:"session_version" gorm:"type:int;not null"`
-	CreatedAt          time.Time  `json:"created_at" gorm:"autoCreateTime;index"`
+	CreatedAt          time.Time  `json:"created_at" gorm:"autoCreateTime;index;index:idx_session_events_session_type_created,priority:3"`
 }
 
 type CaseSessionIdempotencyKey struct {
@@ -107,6 +107,6 @@ type CaseSessionResult struct {
 	XPAfter             int       `json:"xp_after" gorm:"type:int;not null"`
 	ReputationBefore    float64   `json:"reputation_before" gorm:"type:decimal(8,2);not null;default:0"`
 	ReputationAfter     float64   `json:"reputation_after" gorm:"type:decimal(8,2);not null;default:0"`
-	CreatedAt           time.Time `json:"created_at" gorm:"autoCreateTime"`
+	CreatedAt           time.Time `json:"created_at" gorm:"autoCreateTime;index"`
 	UpdatedAt           time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }

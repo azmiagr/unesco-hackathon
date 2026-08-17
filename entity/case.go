@@ -26,11 +26,11 @@ type Case struct {
 	ThumbnailURL             *string        `json:"thumbnail_url" gorm:"type:varchar(500)"`
 	ThumbnailPrompt          *string        `json:"thumbnail_prompt" gorm:"type:text"`
 	GenerationSource         string         `json:"generation_source" gorm:"type:enum('manual','ai_assisted');not null;default:'manual';index"`
-	Status                   string         `json:"status" gorm:"type:enum('draft','published','archived');not null;default:'draft';index"`
-	PublishedAt              *time.Time     `json:"published_at"`
-	CreatedAt                time.Time      `json:"created_at" gorm:"autoCreateTime"`
+	Status                   string         `json:"status" gorm:"type:enum('draft','published','archived');not null;default:'draft';index;index:idx_cases_status_published_created,priority:1"`
+	PublishedAt              *time.Time     `json:"published_at" gorm:"index:idx_cases_status_published_created,priority:3"`
+	CreatedAt                time.Time      `json:"created_at" gorm:"autoCreateTime;index:idx_cases_status_published_created,priority:4"`
 	UpdatedAt                time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
-	DeletedAt                gorm.DeletedAt `json:"deleted_at" gorm:"index"`
+	DeletedAt                gorm.DeletedAt `json:"deleted_at" gorm:"index;index:idx_cases_status_published_created,priority:2"`
 
 	Versions      []CaseVersion      `gorm:"foreignKey:CaseID;references:CaseID;constraint:onDelete:CASCADE"`
 	ChatbotConfig *CaseChatbotConfig `gorm:"foreignKey:CaseID;references:CaseID;constraint:onDelete:CASCADE"`

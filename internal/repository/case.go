@@ -120,9 +120,9 @@ func (r *CaseRepository) ListAdminCases(tx *gorm.DB, param model.AdminListCasesP
 	var cases []model.AdminCaseListRow
 	var total int64
 
-	countQuery := applyAdminCaseFilters(r.buildAdminCaseQuery(tx), param)
+	countQuery := applyAdminCaseFilters(tx.Model(&entity.Case{}), param)
 
-	if err := countQuery.Distinct("cases.case_id").Count(&total).Error; err != nil {
+	if err := countQuery.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -130,7 +130,6 @@ func (r *CaseRepository) ListAdminCases(tx *gorm.DB, param model.AdminListCasesP
 
 	err := dataQuery.
 		Select(adminCaseSelectColumns()).
-		Group("cases.case_id, current_versions.case_version_id").
 		Order("cases.updated_at DESC").
 		Limit(param.Limit).
 		Offset(param.Offset).
@@ -148,7 +147,6 @@ func (r *CaseRepository) GetAdminCaseDetail(tx *gorm.DB, caseID uuid.UUID) (*mod
 	err := r.buildAdminCaseQuery(tx).
 		Where("cases.case_id = ?", caseID).
 		Select(adminCaseSelectColumns()).
-		Group("cases.case_id, current_versions.case_version_id").
 		First(&caseDetail).Error
 	if err != nil {
 		return nil, err
@@ -208,12 +206,20 @@ func (r *CaseRepository) buildAdminCaseQuery(tx *gorm.DB) *gorm.DB {
 				)
 		`).
 		Joins(`
-			LEFT JOIN case_evidences
-				ON case_evidences.case_version_id = current_versions.case_version_id
+			LEFT JOIN (
+				SELECT case_version_id, COUNT(*) AS evidence_count
+				FROM case_evidences
+				GROUP BY case_version_id
+			) evidence_counts
+				ON evidence_counts.case_version_id = current_versions.case_version_id
 		`).
 		Joins(`
-			LEFT JOIN case_questions
-				ON case_questions.case_version_id = current_versions.case_version_id
+			LEFT JOIN (
+				SELECT case_version_id, COUNT(*) AS question_count
+				FROM case_questions
+				GROUP BY case_version_id
+			) question_counts
+				ON question_counts.case_version_id = current_versions.case_version_id
 		`)
 }
 
@@ -359,8 +365,8 @@ func adminCaseSelectColumns() []string {
 		"cases.thumbnail_prompt",
 		"cases.generation_source",
 		"cases.status",
-		"COUNT(DISTINCT case_questions.case_question_id) AS question_count",
-		"COUNT(DISTINCT case_evidences.case_evidence_id) AS evidence_count",
+		"COALESCE(question_counts.question_count, 0) AS question_count",
+		"COALESCE(evidence_counts.evidence_count, 0) AS evidence_count",
 		"cases.published_at",
 		"cases.created_by",
 		"cases.created_at",
