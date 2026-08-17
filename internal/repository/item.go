@@ -117,7 +117,27 @@ func (r *ItemRepository) ListVisibleShopItems(tx *gorm.DB, param model.ListVisib
 			items.created_at
 		`)
 
-	if param.Random {
+	if param.PrioritizeOwnedAvatars && param.CategoryCode == model.ItemCategoryAvatar {
+		hasPurchasedAvatar := clause.Expr{
+			SQL: `EXISTS (
+				SELECT 1
+				FROM user_items owned_user_items
+				INNER JOIN items owned_items ON owned_items.item_id = owned_user_items.item_id
+				INNER JOIN item_categories owned_categories ON owned_categories.item_category_id = owned_items.item_category_id
+				WHERE owned_user_items.user_id = ?
+					AND owned_user_items.purchase_type = ?
+					AND owned_categories.code = ?
+			)`,
+			Vars: []interface{}{param.UserID, model.UserItemPurchaseTypeShop, model.ItemCategoryAvatar},
+		}
+
+		query = query.
+			Order(clause.Expr{
+				SQL:  "CASE WHEN ? THEN CASE WHEN user_items.user_item_id IS NULL THEN 1 ELSE 0 END ELSE 0 END ASC",
+				Vars: []interface{}{hasPurchasedAvatar},
+			}).
+			Order("RAND()")
+	} else if param.Random {
 		query = query.Order("RAND()")
 	} else {
 		query = query.Order("items.created_at ASC")
