@@ -60,6 +60,18 @@ func (s *ProfileService) GetUserProfile(userID uuid.UUID) (*model.GetUserProfile
 	}
 
 	currentLevel := max(profile.CurrentLevel, 1)
+	levelForXP, err := s.gameLevelRepo.GetGameLevelForXP(s.db, profile.CurrentXP)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, appErrors.InternalServer("failed to resolve level from xp")
+	}
+	if levelForXP != nil {
+		currentLevel = levelForXP.Level
+	}
+	if currentLevel != profile.CurrentLevel {
+		if err := s.userProfileRepo.SyncUserProfileLevel(s.db, userID, currentLevel); err != nil {
+			return nil, appErrors.InternalServer("failed to synchronize level from xp")
+		}
+	}
 	currentGameLevel, err := s.gameLevelRepo.GetGameLevel(s.db, model.GetGameLevelParam{Level: currentLevel})
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, appErrors.InternalServer("failed to get current level")

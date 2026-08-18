@@ -11,6 +11,7 @@ import (
 type IGameLevelRepository interface {
 	CreateGameLevel(tx *gorm.DB, level *entity.GameLevel) error
 	GetGameLevel(tx *gorm.DB, param model.GetGameLevelParam) (*entity.GameLevel, error)
+	GetGameLevelForXP(tx *gorm.DB, xp int) (*entity.GameLevel, error)
 	GetGameLevelForUpdate(tx *gorm.DB, gameLevelID uuid.UUID) (*entity.GameLevel, error)
 	ListGameLevels(tx *gorm.DB, param model.ListGameLevelsParam) ([]entity.GameLevel, int64, error)
 	UpdateGameLevel(tx *gorm.DB, level *entity.GameLevel) error
@@ -47,6 +48,20 @@ func (r *GameLevelRepository) GetGameLevel(tx *gorm.DB, param model.GetGameLevel
 	}
 
 	err := query.First(&level).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &level, nil
+}
+
+func (r *GameLevelRepository) GetGameLevelForXP(tx *gorm.DB, xp int) (*entity.GameLevel, error) {
+	var level entity.GameLevel
+
+	err := tx.Model(&entity.GameLevel{}).
+		Where("xp_required <= ?", xp).
+		Order("level DESC").
+		First(&level).Error
 	if err != nil {
 		return nil, err
 	}

@@ -64,6 +64,19 @@ func (s *LobbyService) GetLobbyForUser(userID uuid.UUID) (*model.UserLobbyRespon
 	}
 
 	currentLevelNumber := max(profile.CurrentLevel, 1)
+	levelForXP, err := s.gameLevelRepo.GetGameLevelForXP(s.db, profile.CurrentXP)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, appErrors.InternalServer("failed to resolve level from xp")
+	}
+	if levelForXP != nil {
+		currentLevelNumber = levelForXP.Level
+	}
+	if currentLevelNumber != profile.CurrentLevel {
+		err := s.userProfileRepo.SyncUserProfileLevel(s.db, userID, currentLevelNumber)
+		if err != nil {
+			return nil, appErrors.InternalServer("failed to synchronize level from xp")
+		}
+	}
 
 	currentLevel, err := s.getCurrentGameLevel(currentLevelNumber)
 	if err != nil {

@@ -13,6 +13,7 @@ type IUserProfileRepository interface {
 	GetUserProfileForUpdate(tx *gorm.DB, param model.GetUserProfileParam) (*entity.UserProfile, error)
 	CreateUserProfile(tx *gorm.DB, userProfile *entity.UserProfile) error
 	UpdateUserProfile(tx *gorm.DB, userProfile *entity.UserProfile) error
+	SyncUserProfileLevel(tx *gorm.DB, userID uuid.UUID, level int) error
 	ListLeaderboard(tx *gorm.DB, param model.ListLeaderboardParam) ([]model.LeaderboardEntryRow, int64, error)
 	GetUserLeaderboardRank(tx *gorm.DB, userID uuid.UUID) (*model.LeaderboardEntryRow, error)
 	GetUserProfileDetail(tx *gorm.DB, userID uuid.UUID) (*model.UserProfileDetailRow, error)
@@ -63,6 +64,12 @@ func (r *UserProfileRepository) UpdateUserProfile(tx *gorm.DB, userProfile *enti
 	}
 
 	return nil
+}
+
+func (r *UserProfileRepository) SyncUserProfileLevel(tx *gorm.DB, userID uuid.UUID, level int) error {
+	return tx.Model(&entity.UserProfile{}).
+		Where("user_id = ? AND current_level <> ?", userID, level).
+		Update("current_level", level).Error
 }
 
 func (r *UserProfileRepository) ListLeaderboard(tx *gorm.DB, param model.ListLeaderboardParam) ([]model.LeaderboardEntryRow, int64, error) {

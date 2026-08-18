@@ -1539,15 +1539,24 @@ func (s *GameplayService) resolveLevelAfter(tx *gorm.DB, currentLevel int, xpAft
 		return currentLevel, 0, appErrors.InternalServer("failed to list game levels")
 	}
 
-	levelAfter := currentLevel
+	levelAfter := resolveLevelFromXP(levels, xpAfter)
 	rewardCoin := 0
 	for _, level := range levels {
-		if xpAfter >= level.XPRequired && level.Level > levelAfter {
-			levelAfter = level.Level
+		if xpAfter >= level.XPRequired && level.Level > currentLevel {
 			rewardCoin += level.RewardCoin
 		}
 	}
 	return levelAfter, rewardCoin, nil
+}
+
+func resolveLevelFromXP(levels []entity.GameLevel, xp int) int {
+	resolvedLevel := 1
+	for _, level := range levels {
+		if xp >= level.XPRequired && level.Level > resolvedLevel {
+			resolvedLevel = level.Level
+		}
+	}
+	return resolvedLevel
 }
 
 func calculateXPGained(durationMinutes int, totalScore int, config *entity.GameConfig) int {
